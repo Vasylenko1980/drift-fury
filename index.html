@@ -101,7 +101,7 @@ h2.boss{color:#fff;text-shadow:0 0 24px #ff2a2a,0 0 4px #ff2a2a;font-size:clamp(
     Camera: <kbd>C</kbd> &nbsp; Reset car: <kbd>R</kbd> &nbsp; Pause: <kbd>ESC</kbd> &nbsp; Sound: <kbd>M</kbd> &nbsp; Next song: <kbd>N</kbd><br>
     Drift in the turns to earn <span style="color:#ffd23f">◆ Drift Tokens</span> and fill your nitro!
   </div>
-  <div class="credit">GAME IDEA BY MISHA</div>
+  <div class="credit">GAME IDEA BY MISHA · MUSIC: JOTH &amp; MINTODOG (CC0, OPENGAMEART.ORG)</div>
 </div>
 
 <div id="levels" class="screen">
@@ -443,7 +443,11 @@ function stopEngines(){for(const e of engines){try{e.o.stop();e.n.stop();}catch(
 
 // ---------- music: an original underground soundtrack played by the game itself, or the player's own MP3s ----------
 // Songs are written as patterns and played with WebAudio synths (drums, bass, pads, lead).
+// file songs are CC0 tracks from OpenGameArt (free to use and share)
 const SONGS=[
+  {name:'Funked Up',by:'Joth',file:'music/funked-up.mp3',menu:true},
+  {name:'Pure Raceway',by:'MintoDog',file:'music/pure-raceway.mp3'},
+  {name:'Pure Raceway · Climax',by:'MintoDog',file:'music/pure-raceway-climax.mp3',finalLap:true},
   {name:'Midnight Manhattan',style:'hiphop',bpm:92,root:45,prog:[0,-4,-2,-5],lead:[12,15,17,19,22,19,17,15]},
   {name:'Underground Run',style:'electro',bpm:128,root:40,prog:[0,0,-4,-2],lead:[12,19,24,22,19,17,15,12]},
   {name:'Neon on Broadway',style:'hiphop',bpm:98,root:43,prog:[0,-2,-4,-7],lead:[15,17,19,22,24,22,19,17]},
@@ -494,14 +498,25 @@ function playStep(song,s,t,sd){
     if(bar>=2&&k%4===0)mVoice('square',mtof(root+song.lead[(s>>2)%8]+12),t,sd*3,0.04,2800);
   }
 }
+const nextIdx=i=>{do{i=(i+1)%SONGS.length;}while(SONGS[i].finalLap);return i;};
+function playSong(i){music.idx=i;music.step=0;startMusic();}
+// race start: a racing song; last lap: the Climax track; back in the menu: Funked Up
+function musicFor(moment){
+  if(!AC||!music.on||music.src!=='ost')return;
+  const find=f=>SONGS.findIndex(f);
+  if(moment==='race'){let i=music.idx;do{i=(i+1)%SONGS.length;}while(SONGS[i].finalLap||SONGS[i].menu);playSong(i);}
+  else if(moment==='final'){const i=find(s=>s.finalLap);if(i>=0&&music.idx!==i)playSong(i);}
+  else if(moment==='menu'){const i=find(s=>s.menu);if(i>=0&&music.idx!==i)playSong(i);}
+}
 function musicTick(){
   if(!AC||music.src!=='ost')return;
-  const song=SONGS[music.idx],sd=60/song.bpm/4;
+  const song=SONGS[music.idx];if(song.file)return;
+  const sd=60/song.bpm/4;
   if(music.nextT<AC.currentTime)music.nextT=AC.currentTime+0.05;
   while(music.nextT<AC.currentTime+0.15){
     playStep(song,music.step,music.nextT,sd);
     music.nextT+=sd;music.step++;
-    if(music.step>=16*4*6){music.step=0;music.idx=(music.idx+1)%SONGS.length;music.toast=4;}
+    if(music.step>=16*4*6){playSong(nextIdx(music.idx));return;}
   }
 }
 function stopMusic(){
@@ -520,17 +535,23 @@ function startMusic(){
     music.el.play().catch(()=>{});music.toast=4;
   }else{
     if(music.src==='mine')music.src='ost';
-    music.nextT=AC.currentTime+0.1;music.timer=setInterval(musicTick,25);music.toast=4;
+    const song=SONGS[music.idx];
+    if(song.file){
+      music.el=new Audio(song.file);music.el.volume=0.55;music.el.muted=muted;
+      music.el.onended=()=>playSong(song.finalLap?music.idx:nextIdx(music.idx));
+      music.el.play().catch(()=>{});
+    }else{music.nextT=AC.currentTime+0.1;music.timer=setInterval(musicTick,25);}
+    music.toast=4;
   }
 }
 function nextSong(){
   if(music.src==='mine'&&music.mine.length){music.mineIdx=(music.mineIdx+1)%music.mine.length;}
-  else{music.idx=(music.idx+1)%SONGS.length;music.step=0;}
+  else{music.idx=nextIdx(music.idx);music.step=0;}
   startMusic();
 }
 function songName(){
   if(music.el&&music.mine.length)return music.mine[music.mineIdx%music.mine.length].name;
-  return SONGS[music.idx].name+' · Drift Fury Underground';
+  const s=SONGS[music.idx];return s.file?s.name+' · '+s.by+' (CC0)':s.name+' · Drift Fury Underground';
 }
 
 // the player's own music: kept in this browser only (IndexedDB), never uploaded
@@ -567,9 +588,10 @@ function renderMusic(){
   box.appendChild(inp);
   btn('ADD MP3 FILES…','',()=>inp.click());
   if(music.mine.length)btn('REMOVE MY MUSIC','',async()=>{await clearMyMusic();renderMusic();});
-  const list=el('div','plist');for(const [i,s] of SONGS.entries())list.appendChild(el('div','',(music.src==='ost'&&music.idx===i?'▶ ':'')+s.name));
+  const list=el('div','plist');for(const [i,s] of SONGS.entries())list.appendChild(el('div','',(music.src==='ost'&&music.idx===i?'▶ ':'')+s.name+(s.by?' — '+s.by:'')+(s.finalLap?' (final lap)':'')));
   box.appendChild(list);
   box.appendChild(el('div','fake','Your MP3 files stay on this computer. They are not uploaded anywhere.'));
+  box.appendChild(el('div','hint','Music by Joth and MintoDog, CC0, from OpenGameArt.org. Other songs are made by the game.'));
 }
 
 // ---------- race ----------
@@ -734,6 +756,7 @@ function updateRace(R,dt){
   }
   if(R.skids.length>24000)R.skids.splice(0,R.skids.length-24000);
   collisions(R.cars.filter(c=>!c.gone));
+  if(R.cfg.mode!=='demo'&&!R.finalLap&&R.players.length){const lead=Math.max(...R.players.map(p=>p.total));if(Math.floor(lead/tr.N)+1>=LAPS){R.finalLap=true;musicFor('final');}}
   if(racing)for(const k of R.coins){
     if(k.t>0){k.t-=dt;continue;}
     for(const p of R.players){
@@ -1671,7 +1694,7 @@ function startOnlineRace(track,rid,cd){
   }
   R.cars.slice().sort((a,b)=>a.peer<b.peer?-1:1).forEach((c,k)=>placeOnGrid(R.track,c,k));
   if(cd>0)R.cd=Math.min(3,cd);else R.cd=0.01;
-  race=R;build3D(race);paused=false;show(null);startEngines(race);
+  race=R;build3D(race);paused=false;show(null);startEngines(race);musicFor('race');
 }
 
 function renderOnline(){
@@ -1845,7 +1868,7 @@ function renderIntro(){
 }
 
 function beginRace(cfg){
-  initAudio();dispose3D(race);race=newRace(cfg);build3D(race);paused=false;show(null);startEngines(race);
+  initAudio();dispose3D(race);race=newRace(cfg);build3D(race);paused=false;show(null);startEngines(race);musicFor('race');
 }
 function startStory(i){
   const L=LEVELS[i];
@@ -1863,7 +1886,7 @@ function pause(){
 function resume(){paused=false;show(null);}
 function retry(){if(race)beginRace(race.cfg);}
 function nextLevel(){if(race)startStoryOrIntro(race.cfg.level+1);}
-function endRace(){dispose3D(race);race=null;paused=false;stopEngines();}
+function endRace(){const was=!!race;dispose3D(race);race=null;paused=false;stopEngines();if(was)musicFor('menu');}
 function startStoryOrIntro(i){if(LEVELS[i].boss){endRace();show('intro');}else startStory(i);}
 function quitToMenu(){const wasOnline=race&&race.cfg.mode==='online';endRace();if(wasOnline&&net){netLobby();show('online');}else show('menu');}
 
