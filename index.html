@@ -230,7 +230,11 @@ const CARS={
   skyline:{name:'Silver Skyline GT-R',movie:'2 Fast 2 Furious (2003)',price:60,color:'#cfd8e3',trim:'#1f5eff',glow:'#2f7bff',style:'stripes',spoiler:true,top:580,acc:365,grip:19,turn:3.0,len:45,wid:22},
   evo:    {name:'Lime Lancer Evo',movie:'2 Fast 2 Furious (2003)',price:80,color:'#9cff2e',trim:'#222222',glow:'#00ffaa',style:'swoosh',spoiler:true, top:595,acc:385,grip:20,turn:3.1,len:44,wid:22},
   charger:{name:'Black Charger',movie:"Dominic Toretto's car",price:-1,color:'#141414',trim:'#2a2a2a',glow:'#ff2a2a',style:'blower',spoiler:false,top:640,acc:430,grip:15,turn:2.8,len:50,wid:24},
+  civic:  {name:'Black Honda Civic',movie:'Fast & Furious (2001)',price:30,color:'#121214',trim:'#2bff88',glow:'#2bff88',style:'stripes',spoiler:false,top:530,acc:360,grip:19,turn:3.3,len:40,wid:20},
+  maxima: {name:"Vince's Nissan Maxima",movie:'Fast & Furious (2001)',price:50,color:'#1f4fb8',trim:'#d6dde6',glow:'#2f7bff',style:'swoosh',spoiler:false,top:550,acc:355,grip:17,turn:3.0,len:45,wid:22},
   // exclusive cars (expensive!)
+  s2000tran:{name:"Johnny Tran's Honda S2000",movie:'Fast & Furious (2001)',price:130,excl:true,color:'#17121f',trim:'#8a4dff',glow:'#8a4dff',style:'swoosh',spoiler:true,top:600,acc:395,grip:20,turn:3.4,len:41,wid:21},
+  r33:    {name:"Leon's Skyline R33",movie:'Fast & Furious (2001)',price:140,excl:true,color:'#ffd000',trim:'#111111',glow:'#ffd000',style:'swoosh',spoiler:true,top:600,acc:390,grip:19,turn:3.0,len:45,wid:22},
   jetta:  {name:"Jesse's Jetta",movie:'Fast & Furious (2001)',price:100,excl:true,color:'#eef6f2',trim:'#22c26b',glow:'#2bff88',style:'swoosh',spoiler:true,top:575,acc:390,grip:19,turn:3.2,len:42,wid:21},
   s240:   {name:"Letty's 240SX",movie:'Fast & Furious (2001)',price:120,excl:true,color:'#aab3bd',trim:'#111111',glow:'#7b5cff',style:'swoosh',spoiler:true,top:585,acc:385,grip:18,turn:3.4,len:43,wid:21},
   rx7:    {name:"Dom's Red RX-7",movie:'Fast & Furious (2001)',price:150,excl:true,color:'#d8261f',trim:'#111111',glow:'#ff2a2a',style:'swoosh',spoiler:true,top:605,acc:395,grip:19,turn:3.3,len:43,wid:22},
@@ -239,7 +243,7 @@ const CARS={
   challenger:{name:'Dodge Challenger',movie:'2 Fast 2 Furious (2003)',price:250,excl:true,color:'#f0f0f0',trim:'#111111',glow:'#ff8a00',style:'stripes',spoiler:false,top:645,acc:420,grip:16,turn:2.9,len:49,wid:24},
   robot:  {name:'Robot Racer',movie:'',price:-1,color:'#8a94a6',trim:'#ff2244',glow:'#ff2244',style:'robot',spoiler:false,top:560,acc:340,grip:20,turn:3.0,len:44,wid:22},
 };
-const GARAGE=['supra','eclipse','s2000','skyline','evo','jetta','s240','rx7','spyder','camaro','challenger','charger'];
+const GARAGE=['supra','eclipse','civic','s2000','maxima','skyline','evo','jetta','s240','s2000tran','r33','rx7','spyder','camaro','challenger','charger'];
 const PACKS=[
   {usd:1,tk:10,name:'Pocket Pack'},{usd:5,tk:60,name:'Street Pack'},{usd:10,tk:130,name:'Racer Pack'},
   {usd:50,tk:700,name:'Nitro Pack'},{usd:100,tk:1500,name:'Legend Pack'},{usd:200,tk:3200,name:'Family Pack',best:true},
@@ -418,28 +422,96 @@ function thud(k){
   n.connect(f);f.connect(g);g.connect(master);n.start();n.stop(AC.currentTime+0.3);
 }
 function noiseBuf(){if(noiseB)return noiseB;noiseB=AC.createBuffer(1,AC.sampleRate,AC.sampleRate);const d=noiseB.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;return noiseB;}
+// ---- engine sound: each car has its own engine type, a gearbox, and (where real) a turbo ----
+const ENGINE={
+  supra:{type:'i6',cyl:6,red:7000,turbo:1},   skyline:{type:'i6',cyl:6,red:8000,turbo:1}, r33:{type:'i6',cyl:6,red:7800,turbo:1},
+  eclipse:{type:'i4',cyl:4,red:7000,turbo:1}, evo:{type:'i4',cyl:4,red:7500,turbo:1},     s240:{type:'i4',cyl:4,red:7500,turbo:1},
+  civic:{type:'i4',cyl:4,red:8200,vtec:1},    s2000:{type:'i4',cyl:4,red:9000,vtec:1},     s2000tran:{type:'i4',cyl:4,red:9000,vtec:1},
+  jetta:{type:'v6',cyl:6,red:6800},           maxima:{type:'v6',cyl:6,red:6500},           spyder:{type:'v6',cyl:6,red:6500},
+  rx7:{type:'rotary',cyl:4,red:8500,turbo:1}, charger:{type:'v8',cyl:8,red:6000,blower:1}, camaro:{type:'v8',cyl:8,red:6500},
+  challenger:{type:'v8',cyl:8,red:6200},      robot:{type:'electric',cyl:2,red:12000},
+};
+// harmonic recipes: inline-4 rasp, smooth inline-6, deep V8, buzzy rotary
+const HARM={
+  i4:[0,1,0.65,0.5,0.35,0.3,0.2,0.15,0.12,0.08],
+  i6:[0,1,0.3,0.55,0.15,0.35,0.1,0.2,0.05,0.1],
+  v6:[0,1,0.5,0.4,0.3,0.25,0.15,0.12],
+  v8:[0,1,0.8,0.55,0.45,0.3,0.25,0.18,0.12,0.08],
+  rotary:[0,1,0.15,0.85,0.1,0.65,0.08,0.5,0.06,0.38,0.05,0.28,0.04,0.2],
+  electric:[0,1,0,0.1],
+};
+const DRIVE={i4:45,i6:25,v6:30,v8:60,rotary:80,electric:0};
+function shaper(k){const n=1024,c=new Float32Array(n);for(let i=0;i<n;i++){const x=i*2/n-1;c[i]=k?((1+k)*x)/(1+k*Math.abs(x)):x;}return c;}
 function startEngines(R){
   stopEngines();if(!AC)return;
   for(const p of R.players){
-    const o=AC.createOscillator();o.type='sawtooth';
-    const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=800;
-    const g=AC.createGain();g.gain.value=0;o.connect(f);f.connect(g);g.connect(master);o.start();
-    const n=AC.createBufferSource();n.buffer=noiseBuf();n.loop=true;
+    const spec=ENGINE[p.key]||ENGINE.supra,h=HARM[spec.type];
+    const osc=AC.createOscillator();osc.setPeriodicWave(AC.createPeriodicWave(new Float32Array(h.length),new Float32Array(h)));
+    const ws=AC.createWaveShaper();ws.curve=shaper(DRIVE[spec.type]/100*3);
+    const lp=AC.createBiquadFilter();lp.type='lowpass';lp.Q.value=spec.type==='v8'?2.5:1.2;
+    const amp=AC.createGain(),g=AC.createGain();g.gain.value=0;
+    osc.connect(ws);ws.connect(lp);lp.connect(amp);amp.connect(g);g.connect(master);osc.start();
+    const e={p,spec,osc,lp,amp,g,gear:0,rpm:900,lastT:AC.currentTime,boost:0,lastThrottle:0};
+    if(spec.type==='v8'){ // the lumpy idle: half-speed sub tone + a lope on the volume
+      e.sub=AC.createOscillator();e.sub.type='sine';const sg=AC.createGain();sg.gain.value=0.55;e.sub.connect(sg);sg.connect(lp);e.sub.start();
+      e.lfo=AC.createOscillator();e.lfoG=AC.createGain();e.lfo.connect(e.lfoG);e.lfoG.connect(amp.gain);e.lfo.start();
+    }
+    // exhaust roar
+    e.n=AC.createBufferSource();e.n.buffer=noiseBuf();e.n.loop=true;
+    e.nbp=AC.createBiquadFilter();e.nbp.type='bandpass';e.nbp.Q.value=0.8;
+    e.ng=AC.createGain();e.ng.gain.value=0;e.n.connect(e.nbp);e.nbp.connect(e.ng);e.ng.connect(master);e.n.start();
+    if(spec.turbo||spec.blower){e.tw=AC.createOscillator();e.tw.type='sine';e.twg=AC.createGain();e.twg.gain.value=0;e.tw.connect(e.twg);e.twg.connect(master);e.tw.start();}
+    // tyre screech
+    e.s=AC.createBufferSource();e.s.buffer=noiseBuf();e.s.loop=true;
     const bp=AC.createBiquadFilter();bp.type='bandpass';bp.frequency.value=2400;bp.Q.value=2;
-    const ng=AC.createGain();ng.gain.value=0;n.connect(bp);bp.connect(ng);ng.connect(master);n.start();
-    engines.push({p,o,g,n,ng});
+    e.sg=AC.createGain();e.sg.gain.value=0;e.s.connect(bp);bp.connect(e.sg);e.sg.connect(master);e.s.start();
+    engines.push(e);
   }
+}
+function blowOff(k){
+  if(!AC||muted)return;
+  const n=AC.createBufferSource();n.buffer=noiseBuf();const f=AC.createBiquadFilter();f.type='bandpass';f.frequency.value=2600;f.Q.value=1.5;
+  const g=AC.createGain(),t=AC.currentTime;g.gain.setValueAtTime(0.18*k,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.4);
+  n.connect(f);f.connect(g);g.connect(master);n.start(t,Math.random());n.stop(t+0.45);
 }
 function updateEngines(){
   if(!AC)return;const t=AC.currentTime;
   for(const e of engines){
-    const p=e.p,sp=Math.abs(p.vF);
-    e.o.frequency.setTargetAtTime(45+sp*0.2+(p.nitroOn?45:0),t,0.05);
-    e.g.gain.setTargetAtTime(paused?0:0.03+Math.abs(p.input.t)*0.025,t,0.1);
-    e.ng.gain.setTargetAtTime(!paused&&p.drifting?Math.min(0.08,p.slip/4000):0,t,0.05);
+    const p=e.p,sp=e.spec,dt=Math.min(0.1,t-e.lastT);e.lastT=t;
+    const v=Math.abs(p.vF||0),top=p.def.top*1.05,thr=Math.max(0,p.input.t),idle=sp.type==='electric'?0:850;
+    const gm=[0.3,0.47,0.62,0.76,0.89,1.1].map(f=>f*top);
+    let target;
+    if(v<8){e.gear=0;target=idle+thr*(sp.red*0.45);}
+    else{
+      target=Math.max(idle,sp.red*v/gm[e.gear]);
+      if(target>sp.red*0.96&&e.gear<5){e.gear++;e.shift=0.14;if(sp.turbo&&e.boost>0.4)blowOff(e.boost);target=sp.red*v/gm[e.gear];}
+      else if(e.gear>0&&sp.red*v/gm[e.gear-1]<sp.red*0.66){e.gear--;target=sp.red*v/gm[e.gear];}
+    }
+    target=Math.min(target,sp.red*1.02);
+    e.rpm+=(target-e.rpm)*Math.min(1,dt*(e.shift>0?18:9));
+    if(e.shift>0)e.shift-=dt;
+    // turbo spools with throttle and rpm; lifting off at high boost gives the "pssh"
+    if(sp.turbo||sp.blower){
+      const want=sp.blower?e.rpm/sp.red:thr*clamp((e.rpm-2500)/(sp.red-2500),0,1);
+      e.boost+=(want-e.boost)*Math.min(1,dt*(want>e.boost?2.2:6));
+      if(sp.turbo&&e.lastThrottle>0.5&&thr<0.1&&e.boost>0.45)blowOff(e.boost);
+      e.tw.frequency.setTargetAtTime(sp.blower?600+e.rpm*0.35:1800+e.boost*4200,t,0.05);
+      e.twg.gain.setTargetAtTime(paused?0:e.boost*(sp.blower?0.02:0.028),t,0.08);
+    }
+    e.lastThrottle=thr;
+    const fire=e.rpm/60*sp.cyl/2,r=e.rpm/sp.red,vtec=sp.vtec&&e.rpm>5800;
+    e.osc.frequency.setTargetAtTime(Math.max(20,fire),t,0.03);
+    if(e.sub)e.sub.frequency.setTargetAtTime(fire/2,t,0.03);
+    if(e.lfo){e.lfo.frequency.setTargetAtTime(e.rpm/60/2,t,0.05);e.lfoG.gain.setTargetAtTime(0.5*clamp(1-r*1.6,0,1),t,0.1);}
+    e.lp.frequency.setTargetAtTime(250+r*1800+thr*900+(vtec?2600:0)+(p.nitroOn?800:0),t,0.05);
+    const cut=e.shift>0?0.25:1;
+    e.g.gain.setTargetAtTime(paused?0:(0.05+thr*0.05+r*0.03+(vtec?0.02:0))*cut,t,0.04);
+    e.nbp.frequency.setTargetAtTime(fire*2.2,t,0.05);
+    e.ng.gain.setTargetAtTime(paused?0:(thr*0.02+r*0.015)*(sp.type==='v8'?1.6:1)*cut,t,0.06);
+    e.sg.gain.setTargetAtTime(!paused&&p.drifting?Math.min(0.08,p.slip/4000):0,t,0.05);
   }
 }
-function stopEngines(){for(const e of engines){try{e.o.stop();e.n.stop();}catch(x){}}engines=[];}
+function stopEngines(){for(const e of engines){for(const n of[e.osc,e.sub,e.lfo,e.n,e.tw,e.s]){try{if(n)n.stop();}catch(x){}}}engines=[];}
 
 // ---------- music: an original underground soundtrack played by the game itself, or the player's own MP3s ----------
 // Songs are written as patterns and played with WebAudio synths (drums, bass, pads, lead).
@@ -1246,7 +1318,7 @@ function labelSprite(text,color){
 }
 
 // ---- car models: side profile extruded with rounded edges, glass cabin, real wheels, lights, vinyls ----
-const CAR_SHAPE={supra:'sport',eclipse:'sport',s2000:'roadster',skyline:'sport',evo:'sedan',charger:'muscle',jetta:'sedan',s240:'sport',rx7:'sport',spyder:'roadster',camaro:'muscle',challenger:'muscle',robot:'wedge',taxi:'sedan'};
+const CAR_SHAPE={civic:'sport',maxima:'sedan',s2000tran:'roadster',r33:'sport',supra:'sport',eclipse:'sport',s2000:'roadster',skyline:'sport',evo:'sedan',charger:'muscle',jetta:'sedan',s240:'sport',rx7:'sport',spyder:'roadster',camaro:'muscle',challenger:'muscle',robot:'wedge',taxi:'sedan'};
 const SHAPES={
   sport:   {clear:2.8,nose:5.6,hood:7.8,belt:8.6,roof:13.4,deck:8.9,tail:8.4,ws:[0.64,0.47],rw:[0.29,0.13]},
   sedan:   {clear:3.0,nose:6.4,hood:8.6,belt:9.4,roof:15.0,deck:9.6,tail:9.0,ws:[0.68,0.52],rw:[0.27,0.14]},
@@ -1269,6 +1341,10 @@ const MODEL={
   camaro: {tailL:'bar',grille:true,headL:'round',scoop:true,wing:'duck'},
   challenger:{tailL:'full',grille:true,headL:'round',scoop:true,wing:null},
   robot:  {tailL:'bar',wing:null},
+  civic:  {nose:5.6,hood:7.8,roof:13.6,ws:[0.66,0.48],rw:[0.24,0.1],tailL:'bar',wing:'duck'},
+  maxima: {tailL:'bar',wing:null},
+  s2000tran:{tailL:'bar',wing:'gt'},
+  r33:    {nose:6.0,hood:8.1,roof:13.8,tailL:'round4',wing:'gt'},
 };
 const carMats={};
 function carShared(){
