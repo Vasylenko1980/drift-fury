@@ -234,6 +234,7 @@ const CARS={
   maxima: {name:"Vince's Nissan Maxima",movie:'Fast & Furious (2001)',price:50,color:'#1f4fb8',trim:'#d6dde6',glow:'#2f7bff',style:'swoosh',spoiler:false,top:550,acc:355,grip:17,turn:3.0,len:45,wid:22},
   // exclusive cars (expensive!)
   s2000tran:{name:"Johnny Tran's Honda S2000",movie:'Fast & Furious (2001)',price:130,excl:true,color:'#17121f',trim:'#8a4dff',glow:'#8a4dff',style:'swoosh',spoiler:true,top:600,acc:395,grip:20,turn:3.4,len:41,wid:21},
+  evo9:   {name:"Sean's Lancer Evolution IX",movie:'Tokyo Drift (2006)',price:160,excl:true,color:'#5b6068',trim:'#ff7a00',glow:'#ff7a00',style:'swoosh',spoiler:true,top:590,acc:390,grip:16,turn:3.5,len:44,wid:22},
   r33:    {name:"Leon's Skyline R33",movie:'Fast & Furious (2001)',price:140,excl:true,color:'#ffd000',trim:'#111111',glow:'#ffd000',style:'swoosh',spoiler:true,top:600,acc:390,grip:19,turn:3.0,len:45,wid:22},
   jetta:  {name:"Jesse's Jetta",movie:'Fast & Furious (2001)',price:100,excl:true,color:'#eef6f2',trim:'#22c26b',glow:'#2bff88',style:'swoosh',spoiler:true,top:575,acc:390,grip:19,turn:3.2,len:42,wid:21},
   s240:   {name:"Letty's 240SX",movie:'Fast & Furious (2001)',price:120,excl:true,color:'#aab3bd',trim:'#111111',glow:'#7b5cff',style:'swoosh',spoiler:true,top:585,acc:385,grip:18,turn:3.4,len:43,wid:21},
@@ -243,7 +244,7 @@ const CARS={
   challenger:{name:'Dodge Challenger',movie:'2 Fast 2 Furious (2003)',price:250,excl:true,color:'#f0f0f0',trim:'#111111',glow:'#ff8a00',style:'stripes',spoiler:false,top:645,acc:420,grip:16,turn:2.9,len:49,wid:24},
   robot:  {name:'Robot Racer',movie:'',price:-1,color:'#8a94a6',trim:'#ff2244',glow:'#ff2244',style:'robot',spoiler:false,top:560,acc:340,grip:20,turn:3.0,len:44,wid:22},
 };
-const GARAGE=['supra','eclipse','civic','s2000','maxima','skyline','evo','jetta','s240','s2000tran','r33','rx7','spyder','camaro','challenger','charger'];
+const GARAGE=['supra','eclipse','civic','s2000','maxima','skyline','evo','jetta','s240','s2000tran','r33','evo9','rx7','spyder','camaro','challenger','charger'];
 const PACKS=[
   {usd:1,tk:10,name:'Pocket Pack'},{usd:5,tk:60,name:'Street Pack'},{usd:10,tk:130,name:'Racer Pack'},
   {usd:50,tk:700,name:'Nitro Pack'},{usd:100,tk:1500,name:'Legend Pack'},{usd:200,tk:3200,name:'Family Pack',best:true},
@@ -426,6 +427,7 @@ function noiseBuf(){if(noiseB)return noiseB;noiseB=AC.createBuffer(1,AC.sampleRa
 const ENGINE={
   supra:{type:'i6',cyl:6,red:7000,turbo:1},   skyline:{type:'i6',cyl:6,red:8000,turbo:1}, r33:{type:'i6',cyl:6,red:7800,turbo:1},
   eclipse:{type:'i4',cyl:4,red:7000,turbo:1}, evo:{type:'i4',cyl:4,red:7500,turbo:1},     s240:{type:'i4',cyl:4,red:7500,turbo:1},
+  evo9:{type:'i4',cyl:4,red:7500,turbo:1},
   civic:{type:'i4',cyl:4,red:8200,vtec:1},    s2000:{type:'i4',cyl:4,red:9000,vtec:1},     s2000tran:{type:'i4',cyl:4,red:9000,vtec:1},
   jetta:{type:'v6',cyl:6,red:6800},           maxima:{type:'v6',cyl:6,red:6500},           spyder:{type:'v6',cyl:6,red:6500},
   rx7:{type:'rotary',cyl:4,red:8500,turbo:1}, charger:{type:'v8',cyl:8,red:6000,blower:1}, camaro:{type:'v8',cyl:8,red:6500},
@@ -468,6 +470,16 @@ function startEngines(R){
     engines.push(e);
   }
 }
+// exhaust pop: a sharp crack plus a low thump
+function exhaustPop(k){
+  if(!AC||muted)return;
+  const t=AC.currentTime,n=AC.createBufferSource();n.buffer=noiseBuf();
+  const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=1400+Math.random()*1800;
+  const g=AC.createGain();g.gain.setValueAtTime(0.32*k,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.06+Math.random()*0.04);
+  n.connect(f);f.connect(g);g.connect(master);n.start(t,Math.random());n.stop(t+0.12);
+  const o=AC.createOscillator(),og=AC.createGain();o.frequency.setValueAtTime(110,t);o.frequency.exponentialRampToValueAtTime(45,t+0.08);
+  og.gain.setValueAtTime(0.25*k,t);og.gain.exponentialRampToValueAtTime(0.001,t+0.1);o.connect(og);og.connect(master);o.start(t);o.stop(t+0.12);
+}
 function blowOff(k){
   if(!AC||muted)return;
   const n=AC.createBufferSource();n.buffer=noiseBuf();const f=AC.createBiquadFilter();f.type='bandpass';f.frequency.value=2600;f.Q.value=1.5;
@@ -484,7 +496,7 @@ function updateEngines(){
     if(v<8){e.gear=0;target=idle+thr*(sp.red*0.45);}
     else{
       target=Math.max(idle,sp.red*v/gm[e.gear]);
-      if(target>sp.red*0.96&&e.gear<5){e.gear++;e.shift=0.14;if(sp.turbo&&e.boost>0.4)blowOff(e.boost);target=sp.red*v/gm[e.gear];}
+      if(target>sp.red*0.96&&e.gear<5){e.gear++;e.shift=0.14;e.popUntil=Math.max(e.popUntil||0,t+0.18);if(sp.turbo&&e.boost>0.4)blowOff(e.boost);target=sp.red*v/gm[e.gear];}
       else if(e.gear>0&&sp.red*v/gm[e.gear-1]<sp.red*0.66){e.gear--;target=sp.red*v/gm[e.gear];}
     }
     target=Math.min(target,sp.red*1.02);
@@ -497,6 +509,12 @@ function updateEngines(){
       if(sp.turbo&&e.lastThrottle>0.5&&thr<0.1&&e.boost>0.45)blowOff(e.boost);
       e.tw.frequency.setTargetAtTime(sp.blower?600+e.rpm*0.35:1800+e.boost*4200,t,0.05);
       e.twg.gain.setTargetAtTime(paused?0:e.boost*(sp.blower?0.02:0.028),t,0.08);
+    }
+    if(e.lastThrottle>0.5&&thr<0.1&&e.rpm>sp.red*0.5&&sp.type!=='electric')e.popUntil=t+0.5+Math.random()*0.4;
+    if(e.popUntil>t&&!paused&&Math.random()<0.12){
+      exhaustPop(0.6+Math.random()*0.4);p.popFlash=0.07;
+      if(race){const bx=p.x-Math.cos(p.a)*p.def.len*0.55,by=p.y-Math.sin(p.a)*p.def.len*0.55;
+        for(let i=0;i<4;i++)race.parts.push({x:bx,y:by,vx:-Math.cos(p.a)*120+(Math.random()-0.5)*90,vy:-Math.sin(p.a)*120+(Math.random()-0.5)*90,life:0.35,s:2,spark:true});}
     }
     e.lastThrottle=thr;
     const fire=e.rpm/60*sp.cyl/2,r=e.rpm/sp.red,vtec=sp.vtec&&e.rpm>5800;
@@ -837,7 +855,7 @@ function updateRace(R,dt){
   }
   for(const p of R.parts){p.life-=dt*1.3;p.s+=dt*30;p.x+=p.vx*dt;p.y+=p.vy*dt;}
   R.parts=R.parts.filter(p=>p.life>0);if(R.parts.length>500)R.parts.splice(0,R.parts.length-500);
-  for(const p of R.players)if(p.viewMsgT>0)p.viewMsgT-=dt;
+  for(const p of R.players){if(p.viewMsgT>0)p.viewMsgT-=dt;if(p.popFlash>0)p.popFlash-=dt;}
   for(const p of R.pops){p.life-=dt;p.y-=40*dt;}
   R.pops=R.pops.filter(p=>p.life>0);
   const camCars=R.players.length?R.players:[R.cars[0]];
@@ -1318,7 +1336,7 @@ function labelSprite(text,color){
 }
 
 // ---- car models: side profile extruded with rounded edges, glass cabin, real wheels, lights, vinyls ----
-const CAR_SHAPE={civic:'sport',maxima:'sedan',s2000tran:'roadster',r33:'sport',supra:'sport',eclipse:'sport',s2000:'roadster',skyline:'sport',evo:'sedan',charger:'muscle',jetta:'sedan',s240:'sport',rx7:'sport',spyder:'roadster',camaro:'muscle',challenger:'muscle',robot:'wedge',taxi:'sedan'};
+const CAR_SHAPE={evo9:'sedan',civic:'sport',maxima:'sedan',s2000tran:'roadster',r33:'sport',supra:'sport',eclipse:'sport',s2000:'roadster',skyline:'sport',evo:'sedan',charger:'muscle',jetta:'sedan',s240:'sport',rx7:'sport',spyder:'roadster',camaro:'muscle',challenger:'muscle',robot:'wedge',taxi:'sedan'};
 const SHAPES={
   sport:   {clear:2.8,nose:5.6,hood:7.8,belt:8.6,roof:13.4,deck:8.9,tail:8.4,ws:[0.64,0.47],rw:[0.29,0.13]},
   sedan:   {clear:3.0,nose:6.4,hood:8.6,belt:9.4,roof:15.0,deck:9.6,tail:9.0,ws:[0.68,0.52],rw:[0.27,0.14]},
@@ -1345,6 +1363,7 @@ const MODEL={
   maxima: {tailL:'bar',wing:null},
   s2000tran:{tailL:'bar',wing:'gt'},
   r33:    {nose:6.0,hood:8.1,roof:13.8,tailL:'round4',wing:'gt'},
+  evo9:   {nose:6.6,hood:8.8,tailL:'bar',wing:'gt',scoop:true},
 };
 const carMats={};
 function carShared(){
@@ -1484,8 +1503,13 @@ function makeCar3D(c,R){
   const flames=[];
   const fm=new THREE.MeshBasicMaterial({color:'#4aa0ff',transparent:true,opacity:0.9,blending:THREE.AdditiveBlending,depthWrite:false});
   for(const z of[-Wd*0.3,Wd*0.3]){const f=new THREE.Mesh(new THREE.ConeGeometry(2.2,20,10),fm);f.rotation.z=Math.PI/2;f.position.set(-L/2-8,sh.clear+1.6,z);f.visible=false;g.add(f);flames.push(f);}
+  const pops=[],pm=new THREE.MeshBasicMaterial({color:'#ff8a1a',transparent:true,opacity:0.95,blending:THREE.AdditiveBlending,depthWrite:false});
+  for(const z of[-Wd*0.3,Wd*0.3]){
+    const f=new THREE.Mesh(new THREE.ConeGeometry(2.6,9,10),pm);f.rotation.z=Math.PI/2;f.position.set(-L/2-5,sh.clear+1.6,z);f.visible=false;g.add(f);pops.push(f);
+    const gl=glowSprite('#ff9a30');gl.position.set(-L/2-3,sh.clear+1.6,z);gl.scale.set(14,14,1);gl.visible=false;g.add(gl);pops.push(gl);
+  }
   if(R&&!c.isPlayer&&R.cfg.mode!=='demo')g.add(labelSprite(c.name,c.isRemote?'#ffd23f':c.ai&&c.ai.boss?'#ff4040':'#dfe6f2'));
-  return {g,flames,wheels,steer,brake,sh};
+  return {g,flames,wheels,steer,brake,sh,pops};
 }
 
 function build3D(R){
@@ -1525,6 +1549,7 @@ function sync3D(R,dt){
     // a little body roll while drifting
     o.g.rotation.x=clamp((c.slip||0)/900,0,0.06)*(c.input&&c.input.s<0?-1:1);
     for(const f of o.flames){f.visible=c.nitroOn;f.scale.y=0.7+Math.random()*0.7;}
+    const pop=c.popFlash>0;for(const f of o.pops){f.visible=pop;if(pop){if(f.isSprite){const k=10+Math.random()*9;f.scale.set(k,k,1);}else f.scale.setScalar(0.7+Math.random()*0.6);}}
     const spin=(c.vF!==undefined?c.vF:c.speed||0)*dt/4.6;
     for(const w of o.wheels)w.rotation.z-=spin;
     for(const st of o.steer)st.rotation.y=-(c.input?c.input.s:0)*0.4;
