@@ -757,13 +757,13 @@ function physics(c,dt){
   c.wallT=Math.max(0,(c.wallT||0)-dt);const onWall=c.wallT>0;
   c.nitroOn=inp.n&&c.nitro>0.01&&vF>40&&!onWall;
   if(c.nitroOn){c.nitro=Math.max(0,c.nitro-dt*0.3);if(!wasNitro&&c.isPlayer)whoosh();}
-  const top=d.top*c.skill*(c.nitroOn?1.4:1)*(onWall?0.75:1);
+  const top=d.top*c.skill*(c.nitroOn?1.4:1)*(onWall?0.975:1);
   // engine pulls hard at low speed and fades near top speed, like a real car
   const ratio=clamp(vF/top,0,1),pull=d.acc*0.62*(1-0.85*ratio*ratio)+(c.nitroOn?d.acc*1.6:0);
   if(inp.t>0){if(vF<top)vF=Math.min(top,vF+pull*inp.t*dt);}
   else if(inp.t<0){if(vF>0)vF=Math.max(0,vF-620*dt);else vF=Math.max(-150,vF-d.acc*0.45*dt);}
   else vF*=Math.exp(-0.35*dt);
-  if(vF>top)vF+=(top-vF)*Math.min(1,(onWall?2.1:1.2)*dt);
+  if(vF>top)vF+=(top-vF)*Math.min(1,(onWall?1.29:1.2)*dt);
   // steering wheel turns gradually instead of snapping
   c.steerS=(c.steerS||0)+(inp.s-(c.steerS||0))*Math.min(1,dt*(inp.s===0?9:6));
   const drift=inp.d&&Math.abs(vF)>120;
@@ -831,7 +831,7 @@ function hitWalls(R,c){
     }
   }
   // scraping the wall is never worth it: lose speed fast, no nitro and no drift tokens for a moment
-  c.vx*=0.97;c.vy*=0.97;c.wallT=0.35;
+  c.vx*=0.997;c.vy*=0.997;c.wallT=0.035;
 }
 
 function updateRace(R,dt){
@@ -1119,7 +1119,7 @@ function drawHUD(R,c,vx,vy,vw,vh){
     ctx.font='900 18px "Exo 2","Arial Black",sans-serif';ctx.fillStyle=`rgba(255,255,255,${Math.min(1,c.viewMsgT)})`;
     ctx.fillText('CAMERA: '+VIEW_NAMES[c.view]+'   ['+(c.ctrl==='p2'?"'":'C')+'] to change',w/2,h-125);
   }
-  if(c.wallT>0.15&&!c.finished&&c.speed>60){
+  if(c.wallT>0.02&&!c.finished&&c.speed>60){
     ctx.font='italic 900 26px "Exo 2","Arial Black",sans-serif';ctx.fillStyle='#ff4040';
     ctx.fillText('⚠ WALL! NO NITRO, NO TOKENS',w/2,h/2+130);
   }
