@@ -94,6 +94,7 @@ h2.boss{color:#fff;text-shadow:0 0 24px #ff2a2a,0 0 4px #ff2a2a;font-size:clamp(
   <button onclick="show('garage')">GARAGE</button>
   <button onclick="show('shop')">TOKEN SHOP</button>
   <button id="viewBtn" onclick="cycleMenuView()">CAMERA</button>
+  <button id="gfxBtn" onclick="cycleGfx()">GRAPHICS</button>
   <button onclick="show('music')">MUSIC</button>
   <button class="hot" onclick="show('online')">ONLINE · RACE A FRIEND</button>
   <div class="controls">
@@ -201,14 +202,16 @@ const LAPS=3;
 
 // ---------- canvas ----------
 const cv=document.getElementById('game'),ctx=cv.getContext('2d');
-let W=0,H=0,DPR=1,R3=null,THREE_OK=false;
+let W=0,H=0,DPR=1,R3=null,THREE_OK=false,GFX='high';
+// graphics quality: fewer pixels = smoother on tablets
+function gfxPR(){return GFX==='low'?Math.min(DPR,1)*0.7:GFX==='med'?Math.min(DPR,1.25):DPR;}
 function resize(){
   DPR=Math.min(2,window.devicePixelRatio||1);W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;
-  if(R3){R3.setPixelRatio(DPR);R3.setSize(W,H,false);}
+  if(R3){R3.setPixelRatio(gfxPR());R3.setSize(W,H,false);}
 }
 addEventListener('resize',resize);resize();
 try{
-  if(window.THREE){R3=new THREE.WebGLRenderer({canvas:document.getElementById('gl'),antialias:true});R3.setPixelRatio(DPR);R3.setSize(W,H,false);THREE_OK=true;}
+  if(window.THREE){R3=new THREE.WebGLRenderer({canvas:document.getElementById('gl'),antialias:true});R3.setPixelRatio(gfxPR());R3.setSize(W,H,false);THREE_OK=true;}
 }catch(e){R3=null;THREE_OK=false;}
 
 // camera views: 1st = driver's seat, 2nd = close behind, 3rd = far behind, top = classic map view
@@ -222,6 +225,28 @@ let save={tokens:0,cash:20,owned:['supra'],car:'supra',car2:'eclipse',unlocked:1
 try{const s=JSON.parse(localStorage.getItem(SAVE_KEY));if(s)save=Object.assign(save,s);
   else if(location.hash==='#misha')Object.assign(save,{tokens:209,cash:146,owned:['supra','s2000'],car:'s2000',car2:'supra',unlocked:2,view:'1st'});}catch(e){}
 function persist(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(save));}catch(e){}}
+
+// ---------- graphics quality ----------
+const GFX_NAMES={low:'LOW · FAST',med:'MEDIUM',high:'HIGH'};
+if(!save.gfx)save.gfx='auto';
+function applyGfx(){
+  const touchy=(window.matchMedia&&matchMedia('(pointer: coarse)').matches)||navigator.maxTouchPoints>0;
+  GFX=save.gfx==='auto'?(save.autoGfx||(touchy?'med':'high')):save.gfx;resize();
+  const b=document.getElementById('gfxBtn');
+  if(b)b.textContent='GRAPHICS: '+(save.gfx==='auto'?'AUTO ('+GFX_NAMES[GFX]+')':GFX_NAMES[GFX]);
+}
+function cycleGfx(){const o=['auto','high','med','low'];save.gfx=o[(o.indexOf(save.gfx)+1)%o.length];if(save.gfx==='auto')delete save.autoGfx;persist();applyGfx();}
+// AUTO: if the race runs slower than ~40 frames a second, step the quality down
+const fps={t:0,n:0,msg:0};
+function watchFps(realDt){
+  if(fps.msg>0)fps.msg-=realDt;
+  if(save.gfx!=='auto'||GFX==='low'||!race||paused||race.state!=='race'||realDt>0.5){fps.t=fps.n=0;return;}
+  fps.t+=realDt;fps.n++;
+  if(fps.t>=3){
+    if(fps.n/fps.t<40){save.autoGfx=GFX==='high'?'med':'low';persist();applyGfx();fps.msg=3;}
+    fps.t=fps.n=0;
+  }
+}
 
 // ---------- cars ----------
 const CARS={
@@ -706,6 +731,7 @@ function newRace(cfg){
   cfg.players.forEach((p,i)=>cars.push(makeCar(p.car,{isPlayer:true,pi:i,ctrl:p.ctrl,name:cfg.players.length>1?'P'+(i+1):'YOU',view:save.view,viewMsgT:2.5})));
   cars.forEach((c,k)=>placeOnGrid(tr,c,k));
   return {cfg,track:tr,cars,players:cars.filter(c=>c.isPlayer),coins:tr.coins.map(p=>({x:p[0],y:p[1],t:0})),
+    ghost:cfg.mode==='story'?ghosts[cfg.trackIdx]:null,
     skids:[],parts:[],pops:[],time:0,state:cfg.mode==='demo'?'race':'countdown',cd:3,lastBeep:4,finishCount:0,tokens:[0,0],endT:0,shown:false};
 }
 
@@ -849,6 +875,7 @@ function updateRace(R,dt){
   }
   if(R.skids.length>24000)R.skids.splice(0,R.skids.length-24000);
   collisions(R.cars.filter(c=>!c.gone));
+  ghostTick(R);
   if(R.cfg.mode!=='demo'&&!R.finalLap&&R.players.length){const lead=Math.max(...R.players.map(p=>p.total));if(Math.floor(lead/tr.N)+1>=LAPS){R.finalLap=true;musicFor('final');}}
   if(racing)for(const k of R.coins){
     if(k.t>0){k.t-=dt;continue;}
@@ -874,6 +901,34 @@ function updateRace(R,dt){
     if(!waiting||R.time-R.players[0].ft>30){R.state='done';R.endT=2.2;}
   }
   if(R.state==='done'){R.endT-=dt;if(R.endT<=0&&!R.shown){R.shown=true;showResults(R);}}
+}
+
+// ---------- ghost: your best lap on each track drives with you ----------
+const GHOST_KEY='driftfury_ghost';
+let ghosts={};try{ghosts=JSON.parse(localStorage.getItem(GHOST_KEY))||{};}catch(e){}
+const fmtLap=t=>Math.floor(t/60)+':'+(t%60).toFixed(2).padStart(5,'0');
+function ghostTick(R){
+  if(R.cfg.mode!=='story'||R.players.length!==1||R.state!=='race')return;
+  const c=R.players[0],N=R.track.N,lap=Math.floor(c.total/N);
+  const G=R.gh||(R.gh={lap,start:R.time,rec:[],next:0});
+  if(R.newBest>0)R.newBest-=1/60;
+  if(lap>G.lap){
+    if(G.lap>=0){ // a full lap (lap -1 is the short bit from the grid to the line)
+      const t=R.time-G.start,k=R.cfg.trackIdx,best=ghosts[k];R.lastLap=t;
+      if(!best||t<best.t){ghosts[k]=R.ghost={t:+t.toFixed(2),car:c.key,f:G.rec};R.newBest=2.5;
+        try{localStorage.setItem(GHOST_KEY,JSON.stringify(ghosts));}catch(e){}}
+    }
+    Object.assign(G,{lap,start:R.time,rec:[],next:0});
+  }
+  if(G.lap>=0&&!c.finished&&R.time-G.start>=G.next&&G.rec.length<9000){G.rec.push(Math.round(c.x),Math.round(c.y),+c.a.toFixed(2));G.next+=0.1;}
+}
+// where the ghost is now: frames are 0.1 s apart
+function ghostPos(R){
+  const G=R.gh,gh=R.ghost;if(!G||!gh||G.lap<0||R.players[0].finished)return null;
+  const f=gh.f,u=(R.time-G.start)/0.1,i=Math.floor(u),n=f.length/3;
+  if(i+1>=n)return null;
+  const k=u-i,a0=f[i*3+2];
+  return {x:f[i*3]+(f[i*3+3]-f[i*3])*k,y:f[i*3+1]+(f[i*3+4]-f[i*3+1])*k,a:a0+wrapA(f[i*3+5]-a0)*k};
 }
 
 function placeOf(R,c){
@@ -1023,6 +1078,16 @@ function drawHUD(R,c,vx,vy,vw,vh){
   ctx.fillText(place+ordinal(place),28,66);
   ctx.font='bold 15px system-ui,sans-serif';ctx.fillStyle='#9fb3ff';ctx.fillText('of '+R.cars.length,150,64);
   ctx.fillStyle='#fff';ctx.font='bold 18px system-ui,sans-serif';ctx.fillText(c.finished?'FINISHED!':'LAP '+lap+' / '+LAPS,28,96);
+  if(R.cfg.mode==='story'&&R.players.length===1){
+    const best=ghosts[R.cfg.trackIdx];
+    panel(14,116,200,R.lastLap?58:36);ctx.font='bold 14px system-ui,sans-serif';
+    ctx.fillStyle='#b8a6ff';ctx.fillText('BEST LAP  '+(best?fmtLap(best.t):'—:——'),28,140);
+    if(R.lastLap){ctx.fillStyle='#fff';ctx.fillText('LAST LAP  '+fmtLap(R.lastLap),28,162);}
+    if(R.newBest>0){ctx.save();ctx.textAlign='center';ctx.font='italic 900 34px "Exo 2","Arial Black",sans-serif';ctx.shadowColor='#b8a6ff';ctx.shadowBlur=20;
+      ctx.fillStyle=`rgba(220,210,255,${Math.min(1,R.newBest)})`;ctx.fillText('NEW BEST LAP!  '+fmtLap(R.lastLap),w/2,165);ctx.restore();}
+  }
+  if(fps.msg>0){ctx.save();ctx.textAlign='center';ctx.font='900 16px "Exo 2",sans-serif';ctx.fillStyle=`rgba(198,255,0,${Math.min(1,fps.msg)})`;
+    ctx.fillText('GRAPHICS → '+GFX_NAMES[GFX]+' for a smoother race',w/2,h-150);ctx.restore();}
   if(R.players.length>1){ctx.textAlign='center';ctx.font='900 20px "Exo 2","Arial Black",sans-serif';ctx.fillStyle=c.pi?'#ff4fd8':'#00e5ff';ctx.fillText('PLAYER '+(c.pi+1),w/2,36);}
   panel(w-196,14,182,60);
   ctx.textAlign='left';ctx.font='bold 11px system-ui,sans-serif';ctx.fillStyle='#ffe9a8';ctx.fillText('DRIFT TOKENS',w-182,32);
@@ -1074,7 +1139,7 @@ const streaks=Array.from({length:26},()=>({a:Math.random()*TAU,r:0.42+Math.rando
 function nitroFX(x,y,w,h,k,t){
   const glc=R3.domElement;
   ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
-  for(let i=1;i<=4;i++){
+  for(let i=1;i<=(GFX==='low'?0:GFX==='med'?2:4);i++){
     const sc=1+i*0.028*k,dw=w*sc,dh=h*sc;
     ctx.globalAlpha=0.2*k;
     ctx.drawImage(glc,x*DPR,y*DPR,w*DPR,h*DPR,x+w/2-dw/2,y+h/2-dh/2,dw,dh);
@@ -1338,6 +1403,37 @@ function labelSprite(text,color){
   s.scale.set(96,18,1);s.position.y=40;return s;
 }
 
+// ---- real 3D models: put .glb/.gltf files in /models and list them in models/models.json ----
+const REAL={};
+function loadRealCars(){
+  if(!THREE_OK)return;
+  fetch('models/models.json',{cache:'no-cache'}).then(r=>r.ok?r.json():{}).then(list=>{
+    const keys=Object.keys(list).filter(k=>CARS[k]&&list[k].file);if(!keys.length)return;
+    const go=()=>{const L=new THREE.GLTFLoader();
+      for(const k of keys)L.load('models/'+list[k].file,gl=>{REAL[k]=prepReal(gl.scene,list[k],CARS[k]);
+        if(document.getElementById('garage').classList.contains('show'))renderGarage();},undefined,e=>console.warn('model',k,e));};
+    if(THREE.GLTFLoader)go();
+    else{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';sc.onload=go;document.head.appendChild(sc);}
+  }).catch(()=>{});
+}
+// turn the model to face +x, scale it to the car's length, wheels on the ground
+function prepReal(root,info,d){
+  root.rotation.y=(info.rotY!=null?info.rotY:90)*Math.PI/180;
+  const wrap=new THREE.Group();wrap.add(root);wrap.updateMatrixWorld(true);
+  let box=new THREE.Box3().setFromObject(wrap);const size=box.getSize(new THREE.Vector3());
+  const k=d.len*(info.scale||1.05)/size.x;root.scale.multiplyScalar(k);wrap.updateMatrixWorld(true);
+  box=new THREE.Box3().setFromObject(wrap);const c=box.getCenter(new THREE.Vector3());
+  root.position.x-=c.x;root.position.z-=c.z;root.position.y-=box.min.y;
+  const paintRe=new RegExp(info.paint||'paint|body|carpaint|car_paint|exterior','i');
+  wrap.traverse(m=>{m.userData.real=true;if(m.isMesh){m.castShadow=false;if(m.material&&!Array.isArray(m.material)&&paintRe.test(m.material.name||''))m.userData.paint=true;}});
+  return {wrap,info};
+}
+function realCarMesh(key,color){
+  const g=REAL[key].wrap.clone(true);
+  g.traverse(m=>{if(m.userData.paint&&REAL[key].info.recolor!==false){m.material=m.material.clone();m.material.color.set(color);m.userData.ownMat=true;}});
+  return g;
+}
+
 // ---- car models: side profile extruded with rounded edges, glass cabin, real wheels, lights, vinyls ----
 const CAR_SHAPE={evo9:'sedan',civic:'sport',maxima:'sedan',s2000tran:'roadster',r33:'sport',supra:'sport',eclipse:'sport',s2000:'roadster',skyline:'sport',evo:'sedan',charger:'muscle',jetta:'sedan',s240:'sport',rx7:'sport',spyder:'roadster',camaro:'muscle',challenger:'muscle',robot:'wedge',taxi:'sedan'};
 const SHAPES={
@@ -1500,6 +1596,12 @@ function makeCar3D(c,R){
     wheels.push(spin);if(wx>0)steer.push(st);
     const arch=new THREE.Mesh(M.archGeo,M.arch);arch.position.set(wx,4.2,z*(Wd/2+0.05));if(z<0)arch.rotation.y=Math.PI;g.add(arch);
   }
+  if(REAL[key]){ // a real 3D model replaces the hand-built body
+    const keep=new Set(Object.values(carMats));
+    for(const k of[...g.children]){g.remove(k);k.traverse(m=>{if(m.geometry&&!keep.has(m.geometry))m.geometry.dispose();if(m.material&&!keep.has(m.material)&&m.material!==paint&&m.material!==trimM)m.material.dispose();});}
+    paint.dispose();trimM.dispose();
+    g.add(realCarMesh(key,c.color));wheels.length=0;steer.length=0;brake.length=0;
+  }
   // neon underglow + nitro flames
   const ug=new THREE.Mesh(new THREE.PlaneGeometry(L*1.7,Wd*2.6),new THREE.MeshBasicMaterial({map:getGlowTex(),color:c.glow,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false}));
   ug.rotation.x=-Math.PI/2;ug.position.y=1.2;g.add(ug);
@@ -1534,14 +1636,30 @@ function build3D(R){
   R.g3={sc,cars,coins,smoke,sparks,cams};
 }
 
+function makeGhost3D(key){
+  const d=CARS[key]||CARS.supra,o=makeCar3D({def:d,key,color:d.color,trim:d.trim,glow:'#9fd8ff',name:'',isPlayer:true},null);
+  const keep=new Set(Object.values(carMats));
+  o.g.traverse(m=>{if(!m.material||Array.isArray(m.material))return;
+    const old=m.material;m.material=old.clone();m.material.transparent=true;m.material.opacity=Math.min(old.opacity,0.45);m.material.depthWrite=false;if(m.material.emissive)m.material.emissive.set('#3048b0');
+    if(!keep.has(old)&&!(m.userData.real))old.dispose();m.userData.ghostMat=true;});
+  o.g.renderOrder=5;o.key=key;return o;
+}
+function disposeCar3D(g,sc){
+  if(sc)sc.remove(g);
+  const keep=new Set(Object.values(carMats));
+  g.traverse(m=>{
+    if(m.geometry&&!keep.has(m.geometry)&&!m.userData.real)m.geometry.dispose();
+    if(m.material&&!Array.isArray(m.material)&&!keep.has(m.material)&&(m.userData.ghostMat||m.userData.ownMat||!m.userData.real)){
+      if(!m.userData.ghostMat&&!m.userData.real&&m.material.map&&m.material.map!==glowTex&&!Object.values(sharedTex).includes(m.material.map))m.material.map.dispose();
+      m.material.dispose();}
+  });
+}
 function dispose3D(R){
   if(!R||!R.g3)return;
+  if(R.g3.ghost)disposeCar3D(R.g3.ghost.g,R.g3.sc);
   R.g3.sc.remove(getTrack3D(R.cfg.trackIdx));
   const keep=new Set(Object.values(carMats));
-  for(const o of R.g3.cars)o.g.traverse(m=>{
-    if(m.geometry&&!keep.has(m.geometry))m.geometry.dispose();
-    if(m.material&&!keep.has(m.material)){if(m.material.map&&m.material.map!==glowTex&&!Object.values(sharedTex).includes(m.material.map))m.material.map.dispose();m.material.dispose();}
-  });
+  for(const o of R.g3.cars)disposeCar3D(o.g,null);
   R.g3=null;
 }
 
@@ -1558,6 +1676,9 @@ function sync3D(R,dt){
     for(const st of o.steer)st.rotation.y=-(c.input?c.input.s:0)*0.4;
     const br=c.input&&c.input.t<0?1:0;for(const b of o.brake)b.scale.setScalar(7+br*9);
   });
+  const gp=ghostPos(R);
+  if(gp&&(!G.ghost||G.ghost.key!==R.ghost.car)){if(G.ghost)disposeCar3D(G.ghost.g,G.sc);G.ghost=makeGhost3D(R.ghost.car);G.sc.add(G.ghost.g);}
+  if(G.ghost){G.ghost.g.visible=!!gp;if(gp){G.ghost.g.position.set(gp.x,0,gp.y);G.ghost.g.rotation.y=-gp.a;}}
   R.coins.forEach((k,i)=>{const m=G.coins[i];m.visible=k.t<=0;m.rotation.set(0,R.time*3+i,Math.PI/2);});
   const fill=(points,list,yf)=>{const arr=points.geometry.attributes.position.array;let n=0;
     for(const p of list){if(n>=500)break;arr[n*3]=p.x;arr[n*3+1]=yf(p);arr[n*3+2]=p.y;n++;}
@@ -1903,7 +2024,7 @@ function carPreview3D(key,w,h,dim){
   const out=document.createElement('canvas');out.width=w;out.height=h;const g=out.getContext('2d');g.drawImage(PR.domElement,0,0,w,h);
   PRscene.remove(o.g);
   const keep=new Set(Object.values(carMats));
-  o.g.traverse(m=>{if(m.geometry&&!keep.has(m.geometry))m.geometry.dispose();if(m.material&&!keep.has(m.material))m.material.dispose();});
+  o.g.traverse(m=>{if(m.userData.real&&!m.userData.ownMat)return;if(m.geometry&&!keep.has(m.geometry)&&!m.userData.real)m.geometry.dispose();if(m.material&&!keep.has(m.material))m.material.dispose();});
   if(dim){g.fillStyle='rgba(0,0,0,.55)';g.fillRect(0,0,w,h);g.font='40px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText('🔒',w/2,h/2);}
   return out;
 }
@@ -1925,7 +2046,7 @@ function renderGarage(){
     card.appendChild(carPreview(key,320,140,2.6,!owned));
     const info=document.createElement('div');
     const bar=(lbl,v)=>`<div class="st"><span>${lbl}</span><div class="bar"><i style="width:${Math.round(clamp(v,0.05,1)*100)}%"></i></div></div>`;
-    info.innerHTML=(d.excl||key==='charger'?`<div class="badge">★ EXCLUSIVE</div>`:'')+`<div class="nm">${d.name}</div><div class="mv">${d.movie}</div>`+
+    info.innerHTML=(d.excl||key==='charger'?`<div class="badge">★ EXCLUSIVE</div>`:'')+`<div class="nm">${d.name}</div><div class="mv">${d.movie}</div>`+(REAL[key]?`<div class="mv" style="font-size:11px;opacity:.75">3D model: ${REAL[key].info.title||''} by ${REAL[key].info.by||'?'} · ${REAL[key].info.license||''}</div>`:'')+
       bar('SPEED',(d.top-480)/170)+bar('BOOST',(d.acc-300)/140)+bar('GRIP',(d.grip*d.turn-40)/25);
     card.appendChild(info);
     const btns=document.createElement('div');btns.className='btns';
@@ -2057,10 +2178,12 @@ function showResults(R){
 demo=newRace({mode:'demo',trackIdx:0,players:[],robots:[
   {name:'a',car:'supra',skill:0.86},{name:'b',car:'charger',skill:0.82},{name:'c',car:'skyline',skill:0.84},{name:'d',car:'s2000',skill:0.85},{name:'e',skill:0.83}]});
 if(THREE_OK){try{build3D(demo);}catch(e){console.error(e);}}
+applyGfx();loadRealCars();
 show('menu');
 let last=performance.now();
 function frame(now){
-  const dt=Math.min(0.033,(now-last)/1000);last=now;
+  const realDt=(now-last)/1000,dt=Math.min(0.033,realDt);last=now;
+  watchFps(realDt);
   if(race){if(!paused)updateRace(race,dt);updateEngines();if(race.cfg.mode==='online'&&net)netSend(race);}
   else updateRace(demo,dt);
   updateTouchUI();
