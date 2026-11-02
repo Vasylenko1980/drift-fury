@@ -14,5 +14,13 @@
     "license": "CC BY-NC 4.0",
     "url": "https://sketchfab.com/3d-models/toyota-supra-mk4-a80-61d402d6de904374bfe5a98907c85b1d",
     "paint": "^Paint$"
+  },
+  "charger": {
+    "file": "charger.glb",
+    "title": "1970 Dodge Charger R/T Fast And Furious Edition",
+    "by": "OUTPISTON",
+    "license": "CC BY-NC-SA 4.0",
+    "url": "https://sketchfab.com/3d-models/1970-dodge-charger-rt-fast-and-furious-edition-fd195aaa9dad4aefbace532050b7fca6",
+    "recolor": false
   }
 }
