@@ -1333,7 +1333,57 @@ function getTrack3D(ti){
     }
   }
   addSkyline(grp,b);
+  mergeStatic(grp);
   return track3D[ti]=grp;
+}
+
+// glue the city's many small pieces into a few big meshes: far fewer draw calls = smooth on tablets
+function mergeStatic(grp){
+  grp.updateMatrixWorld(true);
+  const inv=new THREE.Matrix4().copy(grp.matrixWorld).invert(),groups=new Map(),ids=new Map();
+  const id=o=>{if(!o)return 0;if(!ids.has(o))ids.set(o,ids.size+1);return ids.get(o);};
+  grp.traverse(m=>{
+    if(!m.isMesh||m.isInstancedMesh||Array.isArray(m.material)||m.geometry.morphAttributes.position)return;
+    const t=m.material,map=t.map;
+    const key=[t.type,id(map&&map.image),t.color&&t.color.getHexString(),t.fog,t.transparent,t.opacity,t.blending,t.side,t.vertexColors,t.depthWrite,t.roughness,t.metalness].join('|');
+    if(!groups.has(key))groups.set(key,[]);groups.get(key).push(m);
+  });
+  for(const list of groups.values()){
+    if(list.length<2)continue;
+    const mat0=list[0].material,useUV=!!mat0.map,useCol=!!mat0.vertexColors,useN=!mat0.isMeshBasicMaterial;
+    const parts=[];let n=0;
+    for(const m of list){
+      let g=m.geometry.index?m.geometry.toNonIndexed():m.geometry.clone();
+      g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv,m.matrixWorld));
+      if(useUV){const uv=g.attributes.uv;if(!uv){g.dispose();continue;}const mp=m.material.map;
+        for(let i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)*mp.repeat.x+mp.offset.x,uv.getY(i)*mp.repeat.y+mp.offset.y);}
+      if(useCol&&!g.attributes.color){g.dispose();continue;}
+      if(useN&&!g.attributes.normal)g.computeVertexNormals();
+      parts.push([g,m]);n+=g.attributes.position.count;
+    }
+    if(parts.length<2){for(const [g] of parts)g.dispose();continue;}
+    const attrs=[['position',3],...(useN?[['normal',3]]:[]),...(useUV?[['uv',2]]:[]),...(useCol?[['color',3]]:[])];
+    const out=new THREE.BufferGeometry();
+    for(const [name,sz] of attrs){const arr=new Float32Array(n*sz);let o=0;
+      for(const [g] of parts){const a=g.attributes[name];for(let i=0;i<a.count;i++)for(let k=0;k<sz;k++)arr[o++]=a.array[i*a.itemSize+k];}
+      out.setAttribute(name,new THREE.BufferAttribute(arr,sz));}
+    out.computeBoundingSphere();
+    let mat=mat0;if(useUV){mat=mat0.clone();mat.map=mat0.map.clone();mat.map.repeat.set(1,1);mat.map.offset.set(0,0);mat.map.needsUpdate=true;}
+    const merged=new THREE.Mesh(out,mat);merged.renderOrder=list[0].renderOrder;grp.add(merged);
+    for(const [g,m] of parts){g.dispose();m.parent.remove(m);}
+  }
+  // lamp glows: many identical sprites become one cloud of points
+  const sprites=new Map();
+  grp.traverse(sp=>{if(!sp.isSprite||sp.scale.x!==sp.scale.y)return;const k=sp.material.uuid+'|'+sp.scale.x;if(!sprites.has(k))sprites.set(k,[]);sprites.get(k).push(sp);});
+  for(const list of sprites.values()){
+    if(list.length<4)continue;
+    const sm=list[0].material,pos=new Float32Array(list.length*3),v=new THREE.Vector3();
+    list.forEach((sp,i)=>{sp.getWorldPosition(v).applyMatrix4(inv);pos.set([v.x,v.y,v.z],i*3);sp.parent.remove(sp);});
+    const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+    // points have no field-of-view factor like sprites, so they need to be ~1.6x bigger to match
+    const pts=new THREE.Points(geo,new THREE.PointsMaterial({map:sm.map,color:sm.color,size:list[0].scale.x*1.6,sizeAttenuation:true,transparent:true,opacity:sm.opacity,blending:sm.blending,depthWrite:false,fog:sm.fog}));
+    grp.add(pts);
+  }
 }
 
 // Manhattan landmarks, a distant skyline and the night sky (not fogged, so they read as a backdrop)
