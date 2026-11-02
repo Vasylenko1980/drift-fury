@@ -65,11 +65,12 @@ table.res tr.me{color:#00e5ff}
 .fake{color:#ffb3c0;font-family:system-ui,sans-serif;font-weight:800;font-size:13px;margin-bottom:6px}
 #touch{position:fixed;inset:0;z-index:3;pointer-events:none;display:none}
 #touch.show{display:block}
-.tbtn{pointer-events:auto;position:absolute;min-width:0;margin:0;padding:0;transform:none;border-left:2px solid rgba(255,255,255,.4);width:92px;height:92px;border-radius:50%;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.4);color:#fff;font:900 15px "Exo 2","Arial Black",sans-serif;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.tbtn{pointer-events:auto;position:absolute;min-width:0;margin:0;padding:0;transform:none;border-left:2px solid rgba(255,255,255,.4);width:92px;height:92px;border-radius:50%;background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.7);color:#fff;text-shadow:0 1px 3px #000;font:900 15px "Exo 2","Arial Black",sans-serif;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .tbtn:hover:not(:disabled){transform:none;box-shadow:none;background:rgba(255,255,255,.12);border-left-color:rgba(255,255,255,.4)}
 .tbtn.small{width:54px;height:54px;font-size:20px;top:calc(14px + env(safe-area-inset-top,0px))}
-#tL{left:calc(20px + env(safe-area-inset-left,0px));bottom:130px;font-size:34px}
-#tR{left:calc(128px + env(safe-area-inset-left,0px));bottom:130px;font-size:34px}
+#tL,#tR{bottom:120px;width:124px;height:124px;font-size:46px;background:rgba(0,229,255,.22);border:3px solid rgba(255,255,255,.85);text-shadow:0 0 8px #00e5ff;box-shadow:0 0 14px rgba(0,229,255,.45)}
+#tL{left:calc(20px + env(safe-area-inset-left,0px))}
+#tR{left:calc(160px + env(safe-area-inset-left,0px))}
 #tGas{right:calc(24px + env(safe-area-inset-right,0px));bottom:190px;width:108px;height:108px;border-color:#2bff88;background:rgba(43,255,136,.15)}
 #tBrake{right:calc(144px + env(safe-area-inset-right,0px));bottom:190px;width:78px;height:78px}
 #tDrift{right:calc(24px + env(safe-area-inset-right,0px));bottom:312px;border-color:#ff2a6d;background:rgba(255,42,109,.15)}
@@ -735,15 +736,17 @@ function physics(c,dt){
   // steering wheel turns gradually instead of snapping
   c.steerS=(c.steerS||0)+(inp.s-(c.steerS||0))*Math.min(1,dt*(inp.s===0?9:6));
   const drift=inp.d&&Math.abs(vF)>120;
+  // nitro + steering makes the tail slide out, so drifting is easier on nitro
+  const nDrift=!c.isAI&&c.nitroOn&&vF>150&&(drift||Math.abs(c.steerS)>0.3);
   // sideways grip: most sideways speed turns back into forward speed (arcade feel)
-  const grip=drift?1.8:d.grip,sp0=Math.hypot(vF,vR);
+  const grip=nDrift?(drift?1.6:Math.min(d.grip,2.4)):drift?1.8:d.grip,sp0=Math.hypot(vF,vR);
   const nvR=vR*Math.exp(-grip*dt);
   const lost=Math.abs(vR)-Math.abs(nvR);
   vF+=Math.sign(vF)*lost*(drift?0.55:0.85);
   vR=nvR;
   const sp1=Math.hypot(vF,vR);if(sp1>sp0&&sp1>0){vF*=sp0/sp1;vR*=sp0/sp1;} // grip never adds speed
   const sp=Math.min(1,Math.abs(vF)/120);
-  let turn=d.turn*0.85*c.steerS*sp*(vF>=0?1:-1)*(drift?1.4:1);
+  let turn=d.turn*0.85*c.steerS*sp*(vF>=0?1:-1)*(nDrift?(drift?1.5:1.35):drift?1.4:1);
   turn/=1+Math.abs(vF)/900;          // calmer steering at high speed
   c.a+=turn*dt;
   c.vx=fx*vF+rx*vR;c.vy=fy*vF+ry*vR;
