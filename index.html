@@ -90,7 +90,7 @@ h2.boss{color:#fff;text-shadow:0 0 24px #ff2a2a,0 0 4px #ff2a2a;font-size:clamp(
 <div id="menu" class="screen show">
   <div class="tokens" id="menuTokens"></div>
   <h1>DRIFT FURY</h1>
-  <div class="sub">UNDERGROUND · NEW YORK</div>
+  <div class="sub">UNDERGROUND · USA</div>
   <button class="hot" onclick="show('levels')">STORY MODE · 1 PLAYER</button>
   <button onclick="show('twop')">2 PLAYERS · SAME KEYBOARD</button>
   <button onclick="show('garage')">GARAGE</button>
@@ -149,7 +149,7 @@ h2.boss{color:#fff;text-shadow:0 0 24px #ff2a2a,0 0 4px #ff2a2a;font-size:clamp(
   <h2 class="boss">DOMINIC TORETTO</h2>
   <canvas id="domCar" width="440" height="200" style="max-width:90vw"></canvas>
   <div class="quote">“You want my street? You gotta beat me for it.”</div>
-  <div class="hint">Track: Toretto's Block, Queens · 3 laps · Watch out, he uses NITRO!</div>
+  <div class="hint">Track: Toretto's Block, Los Angeles · 3 laps · Watch out, he uses NITRO!</div>
   <button class="hot" onclick="startStory(3)">LET'S RACE!</button>
   <button onclick="show('levels')">NOT YET</button>
 </div>
@@ -286,11 +286,11 @@ if(!save.owned.includes(save.car2))save.car2=save.car;
 const TRACKS=[
   {name:'Manhattan Docks',ground:'#0b1017',grid:'#121a26',road:'#272b33',neon:['#00e5ff','#ff2a6d','#7b5cff'],
    pts:[[0,0],[1400,0],[1900,300],[1900,900],[1400,1200],[700,1000],[0,1200],[-500,900],[-500,300]]},
-  {name:'Times Square',ground:'#0e0b18',grid:'#1a1330',road:'#2a2734',neon:['#ff4fd8','#00ffd5','#ffd000'],
+  {name:'Miami · Ocean Drive',city:'miami',ground:'#d9c49a',grid:'#cdb68a',road:'#3a3a42',neon:['#ff4fd8','#00ffd5','#ffd000'],
    pts:[[0,0],[800,-200],[1600,0],[2000,500],[1600,900],[1100,700],[700,1100],[1100,1500],[600,1900],[-200,1600],[-400,800]]},
-  {name:'Brooklyn Warehouses',ground:'#1a130b',grid:'#251b10',road:'#2e2a26',neon:['#ff8a00','#ffd000','#ff3b3b'],
+  {name:'Arizona · Desert Highway',city:'arizona',ground:'#c97a45',grid:'#bd703e',road:'#45454b',neon:['#ff8a00','#ffd000','#ff3b3b'],
    pts:[[0,0],[600,-400],[1300,-300],[1500,300],[2200,400],[2400,1100],[1800,1500],[1200,1100],[700,1500],[0,1300],[-300,700]]},
-  {name:"Toretto's Block · Queens",ground:'#0d0d10',grid:'#18181e',road:'#25262b',neon:['#ff2a2a','#ffffff','#ff8a00'],
+  {name:"Toretto's Block · Los Angeles",city:'la',ground:'#6b6a4c',grid:'#626145',road:'#3a3b40',neon:['#ff2a2a','#ffffff','#ff8a00'],
    pts:[[0,0],[1000,0],[1300,-500],[2000,-500],[2300,0],[2000,600],[1400,700],[1200,1300],[1800,1700],[1200,2100],[300,1900],[-200,1300],[200,800],[-300,400]]},
 ];
 
@@ -350,9 +350,9 @@ function nearestLocal(tr,x,y,idx){
 const LEVELS=[
   {name:'Robot Rookie',desc:'Your first street race. Beat the robot!',track:0,
    robots:[{name:'BOLT-1',skill:0.80,color:'#8a94a6'}]},
-  {name:'Robot Gang',desc:'Three robots racing through Times Square. Beat them all!',track:1,
+  {name:'Robot Gang',desc:'Three robots racing at sunset in Miami. Beat them all!',track:1,
    robots:[{name:'CRANK',skill:0.83,color:'#5d8aa8'},{name:'RIVET',skill:0.86,color:'#a07cff'},{name:'GEARHEAD',skill:0.88,color:'#3fd0c9'}]},
-  {name:'Race Wars',desc:'The fastest robots in Brooklyn. Use your nitro!',track:2,
+  {name:'Race Wars',desc:'The fastest robots on an Arizona desert highway. Use your nitro!',track:2,
    robots:[{name:'TURBO-TRON',skill:0.90,color:'#c27b3a'},{name:'NEON-X',skill:0.93,color:'#4a5cff'},{name:'MEGA-BOT',skill:0.96,color:'#b0b8c8'}]},
   {name:'BOSS: Dominic Toretto',desc:'The king of the street. One race. Winner takes all.',track:3,boss:true,
    robots:[{name:'DOMINIC TORETTO',car:'charger',skill:0.88,boss:true}]},
@@ -754,15 +754,16 @@ function physics(c,dt){
   const fx=Math.cos(c.a),fy=Math.sin(c.a),rx=-fy,ry=fx;
   let vF=c.vx*fx+c.vy*fy,vR=c.vx*rx+c.vy*ry;
   const wasNitro=c.nitroOn;
-  c.nitroOn=inp.n&&c.nitro>0.01&&vF>40;
+  c.wallT=Math.max(0,(c.wallT||0)-dt);const onWall=c.wallT>0;
+  c.nitroOn=inp.n&&c.nitro>0.01&&vF>40&&!onWall;
   if(c.nitroOn){c.nitro=Math.max(0,c.nitro-dt*0.3);if(!wasNitro&&c.isPlayer)whoosh();}
-  const top=d.top*c.skill*(c.nitroOn?1.4:1);
+  const top=d.top*c.skill*(c.nitroOn?1.4:1)*(onWall?0.5:1);
   // engine pulls hard at low speed and fades near top speed, like a real car
   const ratio=clamp(vF/top,0,1),pull=d.acc*0.62*(1-0.85*ratio*ratio)+(c.nitroOn?d.acc*1.6:0);
   if(inp.t>0){if(vF<top)vF=Math.min(top,vF+pull*inp.t*dt);}
   else if(inp.t<0){if(vF>0)vF=Math.max(0,vF-620*dt);else vF=Math.max(-150,vF-d.acc*0.45*dt);}
   else vF*=Math.exp(-0.35*dt);
-  if(vF>top)vF+=(top-vF)*Math.min(1,1.2*dt);
+  if(vF>top)vF+=(top-vF)*Math.min(1,(onWall?3:1.2)*dt);
   // steering wheel turns gradually instead of snapping
   c.steerS=(c.steerS||0)+(inp.s-(c.steerS||0))*Math.min(1,dt*(inp.s===0?9:6));
   const drift=inp.d&&Math.abs(vF)>120;
@@ -829,7 +830,8 @@ function hitWalls(R,c){
       for(let i=0;i<Math.min(14,vn/25);i++)R.parts.push({x:c.x+nx*10,y:c.y+ny*10,vx:(Math.random()-0.5)*160-nx*80,vy:(Math.random()-0.5)*160-ny*80,life:0.5,s:2,spark:true});
     }
   }
-  c.vx*=0.97;c.vy*=0.97; // scraping the wall slows you down
+  // scraping the wall is never worth it: lose speed fast, no nitro and no drift tokens for a moment
+  c.vx*=0.94;c.vy*=0.94;c.wallT=0.7;
 }
 
 function updateRace(R,dt){
@@ -858,7 +860,7 @@ function updateRace(R,dt){
       if(racing&&(c.isAI||c.finished)){c.stuckT=c.speed<25?c.stuckT+dt:0;if(c.stuckT>2)resetCar(c,tr);}
     }
     // drifting: tokens, nitro, smoke, skid marks
-    c.drifting=racing&&c.speed>150&&c.slip>75&&c.dist<HW+30;
+    c.drifting=racing&&c.speed>150&&c.slip>75&&c.dist<HW+30&&!(c.wallT>0);
     if(c.drifting){
       c.combo+=c.slip*dt;c.comboT=0.6;
       c.nitro=Math.min(1,c.nitro+c.slip*dt/1800);
@@ -1117,6 +1119,10 @@ function drawHUD(R,c,vx,vy,vw,vh){
     ctx.font='900 18px "Exo 2","Arial Black",sans-serif';ctx.fillStyle=`rgba(255,255,255,${Math.min(1,c.viewMsgT)})`;
     ctx.fillText('CAMERA: '+VIEW_NAMES[c.view]+'   ['+(c.ctrl==='p2'?"'":'C')+'] to change',w/2,h-125);
   }
+  if(c.wallT>0.3&&!c.finished&&c.speed>60){
+    ctx.font='italic 900 26px "Exo 2","Arial Black",sans-serif';ctx.fillStyle='#ff4040';
+    ctx.fillText('⚠ WALL! NO NITRO, NO TOKENS',w/2,h/2+130);
+  }
   if(c.dist>HW+260&&!c.finished){
     ctx.font='900 22px "Exo 2","Arial Black",sans-serif';ctx.fillStyle='#ffd23f';
     ctx.fillText('LOST? PRESS '+(c.ctrl==='p2'?'.':'R')+' TO GET BACK ON THE ROAD',w/2,h/2+90);
@@ -1245,11 +1251,11 @@ function neonSign(text,col){
 const track3D={};
 function getTrack3D(ti){
   if(track3D[ti])return track3D[ti];
-  const tr=TRACK_DATA[ti],T=tr.def,b=tr.bounds,grp=new THREE.Group(),N=tr.N;
-  const size=Math.max(b.w,b.h)+7000;
-  const ground=new THREE.Mesh(new THREE.PlaneGeometry(size,size),new THREE.MeshBasicMaterial({color:'#101116'}));
+  const tr=TRACK_DATA[ti],T=tr.def,b=tr.bounds,grp=new THREE.Group(),N=tr.N,TH=themeOf(ti),night=TH.time==='night',day=TH.time==='day';
+  const size=Math.max(b.w,b.h)+(night?7000:16000);
+  const ground=new THREE.Mesh(new THREE.PlaneGeometry(size,size),night?new THREE.MeshBasicMaterial({color:TH.ground}):lam(TH.ground));
   ground.rotation.x=-Math.PI/2;ground.position.set(b.cx,0,b.cy);grp.add(ground);
-  const grid=new THREE.GridHelper(size,Math.round(size/220),'#191b22','#191b22');grid.position.set(b.cx,0.2,b.cy);grp.add(grid);
+  if(night){const grid=new THREE.GridHelper(size,Math.round(size/220),'#191b22','#191b22');grid.position.set(b.cx,0.2,b.cy);grp.add(grid);}
   function ribbon(inner,outer,y,colorFn,mat){
     const pos=[],col=[];
     for(let i=0;i<N;i++){
@@ -1279,11 +1285,11 @@ function getTrack3D(ti){
     return new THREE.Mesh(g,new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.DoubleSide}));
   }
   // wet asphalt: slightly glossy so the city lights reflect in it
-  const roadMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.42,metalness:0,envMapIntensity:0.55,side:THREE.DoubleSide});
-  grp.add(ribbon(-HW-2,HW+2,0.5,i=>i%7===0?'#16171b':'#18191d',roadMat));
+  const roadMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:night?0.42:0.85,metalness:0,envMapIntensity:night?0.55:0.15,side:THREE.DoubleSide}); // wet at night, dry in the sun
+  grp.add(ribbon(-HW-2,HW+2,0.5,i=>i%7===0?TH.road[0]:TH.road[1],roadMat));
   grp.add(ribbon(HW-9,HW-6,0.7,()=>'#d8d8d8'));grp.add(ribbon(-HW+6,-HW+9,0.7,()=>'#d8d8d8'));
   grp.add(ribbon(-4.5,-1.5,0.7,()=>'#e0b020'));grp.add(ribbon(1.5,4.5,0.7,()=>'#e0b020'));
-  grp.add(ribbon(HW+6,HW+52,2.5,i=>i%2?'#3e4148':'#393c43'));grp.add(ribbon(-HW-52,-HW-6,2.5,i=>i%2?'#3e4148':'#393c43'));
+  grp.add(ribbon(HW+6,HW+52,2.5,i=>i%2?TH.walk[0]:TH.walk[1]));grp.add(ribbon(-HW-52,-HW-6,2.5,i=>i%2?TH.walk[0]:TH.walk[1]));
   grp.add(wall(HW+2,11));grp.add(wall(-HW-2,11));
   // street lamps with warm sodium glow and a pool of light on the road
   const poleGeo=new THREE.CylinderGeometry(1.4,2,64,6),poleMat=new THREE.MeshLambertMaterial({color:'#2a2d33'});
@@ -1291,15 +1297,22 @@ function getTrack3D(ti){
   const lampGlow=new THREE.SpriteMaterial({map:getGlowTex(),color:'#ffb45a',transparent:true,blending:THREE.AdditiveBlending,depthWrite:false});
   const poolMat=new THREE.MeshBasicMaterial({map:getGlowTex(),color:'#b8742e',transparent:true,opacity:0.55,blending:THREE.AdditiveBlending,depthWrite:false});
   const poolGeo=new THREE.PlaneGeometry(150,150);
+  const prnd=rng(ti*17+3);
+  if(TH.palms)for(let i=7;i<N;i+=9){const p=tr.S[i],n=tr.nrm[i];for(const sd of[-1,1]){if(prnd()<0.35)continue;palm(grp,p[0]+n[0]*sd*(HW+30),p[1]+n[1]*sd*(HW+30),46+prnd()*30,prnd);}}
+  if(TH.build==='desert')for(let i=5;i<N;i+=6){const p=tr.S[i],n=tr.nrm[i],sd=prnd()<0.5?1:-1,o=HW+60+prnd()*260;
+    if(prnd()<0.55)cactus(grp,p[0]+n[0]*sd*o,p[1]+n[1]*sd*o,26+prnd()*30);
+    else{const r=new THREE.Mesh(new THREE.DodecahedronGeometry(8+prnd()*16,0),pm('#a35f37'));r.position.set(p[0]+n[0]*sd*o,4,p[1]+n[1]*sd*o);r.scale.y=0.6;grp.add(r);}}
   for(let i=3;i<N;i+=9){
+    if(day)break;
     const side=(Math.floor(i/9)%2)?1:-1,p=tr.S[i],n=tr.nrm[i];
     const L=new THREE.Group();L.position.set(p[0]+n[0]*side*(HW+22),0,p[1]+n[1]*side*(HW+22));
     L.rotation.y=-Math.atan2(-n[1]*side,-n[0]*side);
     const pole=new THREE.Mesh(poleGeo,poleMat);pole.position.y=32;L.add(pole);
     const arm=new THREE.Mesh(armGeo,poleMat);arm.position.set(17,63,0);L.add(arm);
     const head=new THREE.Mesh(headGeo,headMat);head.position.set(33,61,0);L.add(head);
-    const gl=new THREE.Sprite(lampGlow);gl.position.set(33,58,0);gl.scale.set(60,60,1);L.add(gl);
+    const gl=new THREE.Sprite(lampGlow);gl.position.set(33,58,0);gl.scale.set(night?60:26,night?60:26,1);L.add(gl);
     grp.add(L);
+    if(!night)continue;
     const pool=new THREE.Mesh(poolGeo,poolMat);pool.rotation.x=-Math.PI/2;
     pool.position.set(p[0]+n[0]*side*(HW-12),0.9,p[1]+n[1]*side*(HW-12));grp.add(pool);
   }
@@ -1319,6 +1332,7 @@ function getTrack3D(ti){
   // city blocks
   const rnd=rng(ti*31+7);
   const tankMat=new THREE.MeshLambertMaterial({color:'#6b4a2e'}),tankRoof=new THREE.MeshLambertMaterial({color:'#3b2a1d'});
+  if(TH.build!=='towers'){addCityBlocks(grp,tr,TH,rnd);addBackdrop(grp,b,TH,ti);mergeStatic(grp);return track3D[ti]=grp;}
   for(const bd of tr.buildings){
     const h=110+Math.pow(rnd(),1.6)*560,kind=Math.floor(rnd()*4);
     const m=new THREE.Mesh(new THREE.BoxGeometry(bd.w,h,bd.h),towerMat(kind,bd.w/55,h/90));
@@ -1388,6 +1402,92 @@ function mergeStatic(grp){
     const pts=new THREE.Points(geo,new THREE.PointsMaterial({map:sm.map,color:sm.color,size:list[0].scale.x*1.6,sizeAttenuation:true,transparent:true,opacity:sm.opacity,blending:sm.blending,depthWrite:false,fog:sm.fog}));
     grp.add(pts);
   }
+}
+
+// ---------- each track is a different city and time of day ----------
+const THEMES={
+  nyc:    {time:'night', fog:'#1a1426',fogN:900, fogF:4200,hemi:['#8090ff','#3a2414',0.55],sun:['#c0ccff',0.45],
+           sky:['#020309','#1b1330','#5a3448'],ground:'#101116',walk:['#3e4148','#393c43'],road:['#16171b','#18191d'],build:'towers'},
+  miami:  {time:'sunset',fog:'#e7a088',fogN:1300,fogF:6500,hemi:['#ffd0b0','#6a4a5a',1.0], sun:['#ffb070',1.1],
+           sky:['#27306e','#b9629a','#ffb46e'],ground:'#d9c49a',walk:['#e9dcc6','#e3d4bb'],road:['#1d1d22','#1f1f24'],build:'deco',palms:true,ocean:true,
+           colors:['#f6b8c8','#9fe0dc','#fff0a8','#c9b4f0','#f6f1e6','#ffc89a']},
+  arizona:{time:'day',   fog:'#e8cfae',fogN:1800,fogF:9000,hemi:['#d6ebff','#a0603a',1.15],sun:['#fff1d6',1.35],
+           sky:['#2f74cf','#86bdec','#f1dcbd'],ground:'#c97a45',walk:['#b36f3e','#ab6838'],road:['#202024','#222226'],build:'desert'},
+  la:     {time:'golden',fog:'#f0c49a',fogN:1400,fogF:7000,hemi:['#ffe4bf','#4c4234',1.05],sun:['#ffc47e',1.25],
+           sky:['#3a6cb4','#eab07c','#ffd6a0'],ground:'#7a7552',walk:['#c2bbae','#bab3a5'],road:['#1c1d21','#1e1f23'],build:'la',palms:true,
+           colors:['#ecdfc6','#dcc6a6','#c9d4dc','#f2e8d6','#bcc6b2','#e6c9b8']},
+};
+const themeOf=ti=>THEMES[TRACK_DATA[ti].def.city||'nyc'];
+// sunny facades: painted wall with rows of blue glass windows
+const dayTexCache={};
+function dayTex(col,kind){
+  const k=col+kind;if(dayTexCache[k])return dayTexCache[k];
+  const t=canvasTex(128,256,(g,w,h)=>{
+    g.fillStyle=col;g.fillRect(0,0,w,h);
+    for(let y=8;y<h-6;y+=14){
+      if(kind===1){g.fillStyle='rgba(255,255,255,.55)';g.fillRect(0,y-3,w,2);} // art deco bands
+      for(let x=6;x<w-6;x+=(kind===1?20:12)){const gr=g.createLinearGradient(0,y,0,y+9);gr.addColorStop(0,'#9cc4e4');gr.addColorStop(1,'#2d4c6c');g.fillStyle=gr;g.fillRect(x,y,kind===1?14:7,9);}
+    }
+    g.fillStyle='rgba(0,0,0,.18)';g.fillRect(0,h-10,w,10);
+  });
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;return dayTexCache[k]=t;
+}
+function dayMat(col,kind,rx,ry){const t=dayTex(col,kind).clone();t.needsUpdate=true;t.repeat.set(Math.max(1,rx),Math.max(1,ry));return new THREE.MeshLambertMaterial({map:t});}
+const lam=c=>new THREE.MeshLambertMaterial({color:c});
+const PROP_MATS={};const pm=c=>PROP_MATS[c]||(PROP_MATS[c]=lam(c));
+function palm(grp,x,z,h,rnd){
+  const lean=(rnd()-0.5)*0.25,tr=new THREE.Mesh(new THREE.CylinderGeometry(1.8,3,h,6),pm('#8a6a48'));
+  tr.position.set(x,h/2,z);tr.rotation.z=lean;grp.add(tr);
+  const tx=x-Math.sin(lean)*h/2*2,top=new THREE.Group();top.position.set(tx,h,z);grp.add(top);
+  const leafGeo=new THREE.BoxGeometry(30,0.8,6);leafGeo.translate(15,0,0);
+  for(let k=0;k<7;k++){const lf=new THREE.Mesh(leafGeo,pm('#3f8a3a'));lf.rotation.order='YZX';lf.rotation.y=k*Math.PI*2/7+rnd();lf.rotation.z=-0.45-rnd()*0.3;top.add(lf);}
+}
+function cactus(grp,x,z,h){
+  const m=pm('#4d7d3a'),body=new THREE.Mesh(new THREE.CylinderGeometry(3.5,4.5,h,8),m);body.position.set(x,h/2,z);grp.add(body);
+  for(const sd of[-1,1]){const ah=h*0.35,arm=new THREE.Mesh(new THREE.CylinderGeometry(2.4,2.4,10,6),m);arm.rotation.z=Math.PI/2;arm.position.set(x+sd*7,h*0.45,z);grp.add(arm);
+    const up=new THREE.Mesh(new THREE.CylinderGeometry(2.4,2.6,ah,6),m);up.position.set(x+sd*12,h*0.45+ah/2,z);grp.add(up);}
+}
+
+function addCityBlocks(grp,tr,TH,rnd){
+  if(TH.build==='desert'){ // a few roadside shacks and a gas station sign, nothing tall
+    for(const bd of tr.buildings){if(rnd()>0.12)continue;const h=18+rnd()*14;
+      const m=new THREE.Mesh(new THREE.BoxGeometry(bd.w*0.6,h,bd.h*0.6),dayMat('#d8b48a',0,bd.w/80,1));m.position.set(bd.x+bd.w/2,h/2,bd.y+bd.h/2);grp.add(m);
+      const roof=new THREE.Mesh(new THREE.BoxGeometry(bd.w*0.66,3,bd.h*0.66),pm('#7a4a2e'));roof.position.set(m.position.x,h+1.5,m.position.z);grp.add(roof);}
+    return;
+  }
+  const deco=TH.build==='deco';
+  for(const bd of tr.buildings){
+    const h=deco?40+Math.pow(rnd(),1.3)*150:50+Math.pow(rnd(),1.8)*300,col=TH.colors[Math.floor(rnd()*TH.colors.length)];
+    const m=new THREE.Mesh(new THREE.BoxGeometry(bd.w,h,bd.h),dayMat(col,deco?1:0,bd.w/60,h/70));m.position.set(bd.x+bd.w/2,h/2,bd.y+bd.h/2);grp.add(m);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(bd.w+4,5,bd.h+4),pm(deco?'#ffffff':'#8f877a'));cap.position.set(m.position.x,h+2.5,m.position.z);grp.add(cap);
+    const r2=rnd();
+    if(deco&&r2<0.3){const s=neonSign(NYC_SIGNS[Math.floor(rnd()*NYC_SIGNS.length)],tr.def.neon[Math.floor(rnd()*tr.def.neon.length)]);s.position.set(m.position.x,h+26,m.position.z);grp.add(s);}
+    else if(r2<0.45)palm(grp,m.position.x+bd.w/2+14,m.position.z,40+rnd()*30,rnd);
+  }
+}
+// far away: ocean, desert mesas or the LA hills and downtown, plus a sky with the sun
+function addBackdrop(grp,b,TH,ti){
+  const R0=rng(ti*41+5);
+  if(TH.ocean){const sea=new THREE.Mesh(new THREE.PlaneGeometry(30000,30000),new THREE.MeshStandardMaterial({color:'#1f7fa6',roughness:0.12,metalness:0.1,envMapIntensity:1}));
+    sea.rotation.x=-Math.PI/2;sea.position.set(b.x1+900+15000,0.4,b.cy);grp.add(sea);}
+  if(TH.build==='desert')for(let k=0;k<16;k++){ // red rock mesas and buttes
+    const a=k/16*Math.PI*2+R0(),d=3200+R0()*2600,r=250+R0()*500,h=260+R0()*520;
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(r*0.8,r,h,7),pm(R0()<0.5?'#b4583a':'#c06a43'));m.position.set(b.cx+Math.cos(a)*d,h/2,b.cy+Math.sin(a)*d);grp.add(m);}
+  if(TH.build==='la'){
+    for(let k=0;k<10;k++){const a=Math.PI*1.1+k*0.12,d=5200+R0()*600,r=700+R0()*600,h=380+R0()*400; // hills
+      const m=new THREE.Mesh(new THREE.SphereGeometry(r,10,6,0,Math.PI*2,0,Math.PI/2),pm(R0()<0.5?'#8c7a52':'#7d7048'));m.scale.y=h/r;m.position.set(b.cx+Math.cos(a)*d,0,b.cy+Math.sin(a)*d);grp.add(m);}
+    for(let k=0;k<9;k++){const w=120+R0()*140,h=500+R0()*900,x=b.x1+1800+(R0()-0.5)*900,z=b.cy-2600+(R0()-0.5)*900; // downtown towers
+      const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,w),dayMat(R0()<0.5?'#c9d4dc':'#aebccb',0,w/40,h/60));m.position.set(x,h/2,z);grp.add(m);}
+  }
+  // sky: deep blue on top to warm at the horizon
+  const [cTop,cMid,cHor]=TH.sky.map(c=>new THREE.Color(c));
+  const sg=new THREE.SphereGeometry(12000,32,16),cols=[],p=sg.attributes.position,c=new THREE.Color();
+  for(let i=0;i<p.count;i++){const yy=p.getY(i)/12000;if(yy<0)c.copy(cHor);else if(yy<0.15)c.copy(cHor).lerp(cMid,yy/0.15);else c.copy(cMid).lerp(cTop,Math.min(1,(yy-0.15)/0.55));cols.push(c.r,c.g,c.b);}
+  sg.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));
+  const dome=new THREE.Mesh(sg,new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.BackSide,fog:false,depthWrite:false}));
+  dome.position.set(b.cx,0,b.cy);dome.renderOrder=-2;grp.add(dome);
+  const low=TH.time!=='day',sun=new THREE.Sprite(new THREE.SpriteMaterial({map:getGlowTex(),color:low?'#ffb060':'#fff6dc',transparent:true,fog:false,depthWrite:false,blending:THREE.AdditiveBlending}));
+  sun.position.set(b.cx-6000,low?700:5200,b.cy-7000);sun.scale.set(low?2600:1600,low?2600:1600,1);grp.add(sun);
 }
 
 // Manhattan landmarks, a distant skyline and the night sky (not fogged, so they read as a backdrop)
@@ -1679,11 +1779,12 @@ function makeCar3D(c,R){
 function build3D(R){
   if(!THREE_OK)return;
   const sc=new THREE.Scene();
-  sc.fog=new THREE.Fog('#1a1426',900,4200);
+  const TH=themeOf(R.cfg.trackIdx);
+  sc.fog=new THREE.Fog(TH.fog,TH.fogN,TH.fogF);
   sc.environment=getEnv(R.cfg.trackIdx);
   sc.add(getTrack3D(R.cfg.trackIdx));
-  sc.add(new THREE.HemisphereLight('#8090ff','#3a2414',0.55));
-  const dl=new THREE.DirectionalLight('#c0ccff',0.45);dl.position.set(-300,800,200);sc.add(dl);
+  sc.add(new THREE.HemisphereLight(TH.hemi[0],TH.hemi[1],TH.hemi[2]));
+  const dl=new THREE.DirectionalLight(TH.sun[0],TH.sun[1]);dl.position.set(-600,TH.time==='day'?900:350,-700);sc.add(dl);
   const cars=R.cars.map(c=>{const o=makeCar3D(c,R);sc.add(o.g);return o;});
   const coinGeo=new THREE.CylinderGeometry(11,11,3,20);
   const coinMat=new THREE.MeshStandardMaterial({color:'#ffd23f',emissive:'#7a5200',metalness:0.8,roughness:0.25});
