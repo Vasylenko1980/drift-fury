@@ -1810,11 +1810,79 @@ function peerRoomApi(){
   })};
 }
 
-let roomApi=null,roomState='pending',net=null,onlineMsg='';
+// online through a public MQTT relay (plain secure WebSocket, no peer-to-peer needed, works behind most routers)
+function mqttRoomApi(){
+  const BROKERS=['wss://broker.hivemq.com:8884/mqtt','wss://broker.emqx.io:8084/mqtt'];
+  const te=new TextEncoder(),td=new TextDecoder();
+  const str=t=>{const b=te.encode(t);return [b.length>>8,b.length&255,...b];};
+  const pkt=(type,body)=>{const out=[type];let n=body.length;do{let d=n%128;n=Math.floor(n/128);if(n>0)d|=128;out.push(d);}while(n>0);return new Uint8Array([...out,...body]);};
+  const connectWS=(url,id,will)=>new Promise((res,rej)=>{
+    let ws;try{ws=new WebSocket(url,'mqtt');}catch(e){rej(e);return;}
+    ws.binaryType='arraybuffer';const t=setTimeout(()=>{try{ws.close();}catch(e){}rej('timeout');},8000);
+    ws.onopen=()=>ws.send(pkt(0x10,[...str('MQTT'),4,0x06,0,30,...str(id),...str(will[0]),...str(will[1])]));
+    ws.onerror=()=>{clearTimeout(t);rej('ws');};
+    ws.onmessage=e=>{const b=new Uint8Array(e.data);if(b[0]===0x20){clearTimeout(t);b[3]===0?res(ws):rej('refused');}};
+  });
+  return {join:async(name,isHost)=>{
+    const myId='p'+Math.random().toString(36).slice(2,10),base='driftfury/v1/'+name+'/';
+    let ws=null,err='';
+    for(const u of BROKERS){try{ws=await connectWS(u,'df_'+myId,[base+'bye/'+myId,'1']);break;}catch(e){err=String(e);}}
+    if(!ws)throw {code:'upstream_error',why:'relay '+err};
+    let myPres=Object.freeze({}),errFn=null,closed=false,buf=new Uint8Array(0),lastPub=0,pubT=null;
+    const others=new Map(),seen=new Map(),listeners=new Set();
+    const snapshot=()=>[{peer:myId,sameTab:true,isMe:true,presence:myPres},...[...others].map(([id,p])=>({peer:id,sameTab:false,isMe:false,presence:p}))];
+    const notify=(left=[])=>{const peers=snapshot();for(const h of listeners){try{h({peers,joined:[],left,updated:[]});}catch(e){console.error(e);}}};
+    const send=b=>{try{if(ws.readyState===1)ws.send(b);}catch(e){}};
+    const publish=()=>{lastPub=performance.now();pubT=null;send(pkt(0x30,[...str(base+'p/'+myId),...te.encode(JSON.stringify(myPres))]));};
+    const drop=id=>{if(!others.has(id))return;const wasHost=others.get(id).host===true;others.delete(id);seen.delete(id);notify([{peer:id}]);
+      if(wasHost&&!isHost&&errFn){const f=errFn;errFn=null;f({code:'host_left'});}};
+    const onPublish=(topic,data)=>{
+      const parts=topic.slice(base.length).split('/'),id=parts[1];if(!id||id===myId)return;
+      if(parts[0]==='bye'){drop(id);return;}
+      let p;try{p=JSON.parse(td.decode(data));}catch(e){return;}
+      if(!p||typeof p!=='object')return;
+      others.set(id,Object.freeze(p));seen.set(id,performance.now());notify();
+    };
+    ws.onmessage=e=>{
+      const nb=new Uint8Array(e.data),all=new Uint8Array(buf.length+nb.length);all.set(buf);all.set(nb,buf.length);buf=all;
+      for(;;){
+        if(buf.length<2)break;
+        let len=0,mul=1,i=1,d;do{if(i>=buf.length)return;d=buf[i++];len+=(d&127)*mul;mul*=128;}while(d&128);
+        if(buf.length<i+len)break;
+        const type=buf[0]>>4,body=buf.subarray(i,i+len);buf=buf.slice(i+len);
+        if(type===3){const tl=(body[0]<<8)|body[1];onPublish(td.decode(body.subarray(2,2+tl)),body.subarray(2+tl));} // QoS 0: no packet id
+      }
+    };
+    ws.onclose=()=>{if(!closed&&errFn){const f=errFn;errFn=null;f({code:'lost'});}};
+    send(pkt(0x82,[0,1,...str(base+'#'),0]));
+    // heartbeat + forget racers we stop hearing from
+    const hb=setInterval(()=>{send(new Uint8Array([0xC0,0]));if(performance.now()-lastPub>1500)publish();
+      const now=performance.now();for(const [id,t] of seen)if(now-t>7000)drop(id);},1000);
+    const room={
+      presence:async patch=>{
+        const n=Object.assign({},myPres,patch);for(const k in patch)if(patch[k]===null)delete n[k];myPres=Object.freeze(n);
+        const wait=66-(performance.now()-lastPub); // at most ~15 updates a second
+        if(wait<=0)publish();else if(!pubT)pubT=setTimeout(publish,wait);
+      },
+      peers:()=>snapshot(),
+      onPeers:(h,onErr)=>{listeners.add(h);if(onErr)errFn=onErr;setTimeout(()=>{if(listeners.has(h))h({peers:snapshot(),joined:snapshot(),left:[],updated:[]});},0);return()=>listeners.delete(h);},
+      leave:async()=>{closed=true;clearInterval(hb);listeners.clear();errFn=null;send(pkt(0x30,[...str(base+'bye/'+myId),...te.encode('1')]));send(new Uint8Array([0xE0,0]));setTimeout(()=>{try{ws.close();}catch(e){}},100);},
+    };
+    if(!isHost){ // make sure the host is really there
+      publish();
+      const ok=await new Promise(r=>{const t0=performance.now();const iv=setInterval(()=>{
+        if([...others.values()].some(p=>p.host===true)){clearInterval(iv);r(true);}else if(performance.now()-t0>6000){clearInterval(iv);r(false);}},150);});
+      if(!ok){await room.leave();throw {code:'no_room'};}
+    }
+    return room;
+  }};
+}
+
+let roomApi=null,roomState='pending',net=null,onlineMsg='',mqttApi=null,peerApi=null;
 (async()=>{
   try{roomApi=window.claude&&window.claude.use?await window.claude.use('room'):null;}catch(e){roomApi=null;}
-  if(!roomApi&&window.Peer)roomApi=peerRoomApi();
-  roomState=roomApi?'ready':'none';
+  if(!roomApi){mqttApi=window.WebSocket?mqttRoomApi():null;peerApi=window.Peer?peerRoomApi():null;}
+  roomState=roomApi||mqttApi||peerApi?'ready':'none';
   if(document.getElementById('online').classList.contains('show'))renderOnline();
 })();
 const cleanName=n=>String(n==null?'':n).replace(/[^\p{L}\p{N} _-]/gu,'').trim().slice(0,12)||'Friend';
@@ -1826,11 +1894,13 @@ function myPresence(extra){
 }
 function netLobby(){myPresence({st:'lobby',r:null,cd:0,rt:999});}
 
-const newCode=()=>{const ch='abcdefghjkmnpqrstuvwxyz23456789';let c='';for(let i=0;i<4;i++)c+=ch[Math.floor(Math.random()*ch.length)];return c;};
+const newCode=(n=4)=>{const ch='abcdefghjkmnpqrstuvwxyz23456789';let c='';for(let i=0;i<n;i++)c+=ch[Math.floor(Math.random()*ch.length)];return c;};
 async function joinRoom(code,isHost,tries=0){
   onlineMsg=tries?'Connecting… (try '+(tries+1)+')':'Connecting…';renderOnline();
   try{
-    const room=await roomApi.join('race-'+code,isHost);
+    // 4-letter codes use the relay, 5-letter codes use peer-to-peer (backup)
+    const api=roomApi||(code.length===5?peerApi:mqttApi)||peerApi;
+    const room=await api.join('race-'+code,isHost);
     net={room,code,isHost,track:0,lastRid:null,peers:room.peers(),lastSend:0};
     net.unsub=room.onPeers(onNetPeers,e=>{
       onlineMsg=e.code==='host_left'?'The host left the race room.':'Lost the connection. Try again.';
@@ -1841,7 +1911,11 @@ async function joinRoom(code,isHost,tries=0){
     const c=e&&e.code;
     if(isHost&&c==='code_taken'&&tries<3)return joinRoom(newCode(),true,tries+1);
     // the free connection server sometimes hiccups: try again by itself
-    if((c==='timeout'||c==='upstream_error')&&tries<2){await new Promise(r=>setTimeout(r,1500));return joinRoom(code,isHost,tries+1);}
+    if((c==='timeout'||c==='upstream_error')&&tries<2){
+      await new Promise(r=>setTimeout(r,1000));
+      // host: if the relay fails twice, switch to the peer-to-peer backup (5-letter code)
+      return joinRoom(isHost&&!roomApi&&tries===1&&code.length===4&&peerApi?newCode(5):code,isHost,tries+1);
+    }
     onlineMsg=c==='no_room'?'No race found with code '+code.toUpperCase()+'. Check the code with your friend.'
       :c==='not_permitted'?'This account is not allowed into online races here. Ask the game owner to share the link with you.'
       :'Could not connect ('+((e&&e.why)||'unknown')+'). Check the internet, turn off VPN or ad blocker for this site, and try again.';
@@ -1942,7 +2016,7 @@ function renderOnline(){
     btn('CREATE A RACE','hot',()=>{if(!getNick())return;joinRoom(newCode(),true);});
     box.appendChild(el('div','hint','or join your friend\'s race with their code:'));
     const code=el('input','txt');code.id='code';code.maxLength=6;code.placeholder='CODE';code.style.textTransform='uppercase';box.appendChild(code);
-    const doJoin=()=>{if(!getNick())return;const c=code.value.trim().toLowerCase().replace(/[^a-z0-9]/g,'');if(c.length<3){onlineMsg='Type the 4-letter code from your friend.';renderOnline();return;}joinRoom(c,false);};
+    const doJoin=()=>{if(!getNick())return;const c=code.value.trim().toLowerCase().replace(/[^a-z0-9]/g,'');if(c.length<3){onlineMsg='Type the code from your friend.';renderOnline();return;}joinRoom(c,false);};
     code.addEventListener('submit-key',doJoin);
     box.appendChild(el('br'));
     btn('JOIN','',doJoin);
