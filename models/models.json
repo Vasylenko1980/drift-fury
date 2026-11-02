@@ -22,5 +22,14 @@
     "license": "CC BY-NC-SA 4.0",
     "url": "https://sketchfab.com/3d-models/1970-dodge-charger-rt-fast-and-furious-edition-fd195aaa9dad4aefbace532050b7fca6",
     "recolor": false
+  },
+  "ae86": {
+    "file": "ae86.glb",
+    "title": "Toyota Trueno AE86",
+    "by": "Flamestroke",
+    "license": "CC BY 4.0",
+    "url": "https://sketchfab.com/3d-models/toyota-trueno-ae86-initial-d-40c0a445f8fa42568c7ecf208b6d97bd",
+    "rotY": -90,
+    "recolor": false
   }
 }

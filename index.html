@@ -262,6 +262,7 @@ const CARS={
   maxima: {name:"Vince's Nissan Maxima",movie:'Fast & Furious (2001)',price:50,color:'#1f4fb8',trim:'#d6dde6',glow:'#2f7bff',style:'swoosh',spoiler:false,top:550,acc:355,grip:17,turn:3.0,len:45,wid:22},
   // exclusive cars (expensive!)
   s2000tran:{name:"Johnny Tran's Honda S2000",movie:'Fast & Furious (2001)',price:130,excl:true,color:'#17121f',trim:'#8a4dff',glow:'#8a4dff',style:'swoosh',spoiler:true,top:600,acc:395,grip:20,turn:3.4,len:41,wid:21},
+  ae86:   {name:'Panda AE86 Trueno',movie:'Japanese drift legend (1983)',price:110,excl:true,color:'#f2f2f2',trim:'#111111',glow:'#ffffff',style:'stripes',spoiler:false,top:515,acc:345,grip:17,turn:3.6,len:40,wid:20},
   evo9:   {name:"Sean's Lancer Evolution IX",movie:'Tokyo Drift (2006)',price:160,excl:true,color:'#5b6068',trim:'#ff7a00',glow:'#ff7a00',style:'swoosh',spoiler:true,top:590,acc:390,grip:16,turn:3.5,len:44,wid:22},
   r33:    {name:"Leon's Skyline R33",movie:'Fast & Furious (2001)',price:140,excl:true,color:'#ffd000',trim:'#111111',glow:'#ffd000',style:'swoosh',spoiler:true,top:600,acc:390,grip:19,turn:3.0,len:45,wid:22},
   jetta:  {name:"Jesse's Jetta",movie:'Fast & Furious (2001)',price:100,excl:true,color:'#eef6f2',trim:'#22c26b',glow:'#2bff88',style:'swoosh',spoiler:true,top:575,acc:390,grip:19,turn:3.2,len:42,wid:21},
@@ -272,7 +273,7 @@ const CARS={
   challenger:{name:'Dodge Challenger',movie:'2 Fast 2 Furious (2003)',price:250,excl:true,color:'#f0f0f0',trim:'#111111',glow:'#ff8a00',style:'stripes',spoiler:false,top:645,acc:420,grip:16,turn:2.9,len:49,wid:24},
   robot:  {name:'Robot Racer',movie:'',price:-1,color:'#8a94a6',trim:'#ff2244',glow:'#ff2244',style:'robot',spoiler:false,top:560,acc:340,grip:20,turn:3.0,len:44,wid:22},
 };
-const GARAGE=['supra','eclipse','civic','s2000','maxima','skyline','evo','jetta','s240','s2000tran','r33','evo9','rx7','spyder','camaro','challenger','charger'];
+const GARAGE=['supra','eclipse','civic','s2000','maxima','skyline','evo','jetta','s240','s2000tran','r33','evo9','ae86','rx7','spyder','camaro','challenger','charger'];
 const PACKS=[
   {usd:1,tk:10,name:'Pocket Pack'},{usd:5,tk:60,name:'Street Pack'},{usd:10,tk:130,name:'Racer Pack'},
   {usd:50,tk:700,name:'Nitro Pack'},{usd:100,tk:1500,name:'Legend Pack'},{usd:200,tk:3200,name:'Family Pack',best:true},
@@ -456,6 +457,7 @@ const ENGINE={
   supra:{type:'i6',cyl:6,red:7000,turbo:1},   skyline:{type:'i6',cyl:6,red:8000,turbo:1}, r33:{type:'i6',cyl:6,red:7800,turbo:1},
   eclipse:{type:'i4',cyl:4,red:7000,turbo:1}, evo:{type:'i4',cyl:4,red:7500,turbo:1},     s240:{type:'i4',cyl:4,red:7500,turbo:1},
   evo9:{type:'i4',cyl:4,red:7500,turbo:1},
+  ae86:{type:'i4',cyl:4,red:7600,turbo:0},
   civic:{type:'i4',cyl:4,red:8200,vtec:1},    s2000:{type:'i4',cyl:4,red:9000,vtec:1},     s2000tran:{type:'i4',cyl:4,red:9000,vtec:1},
   jetta:{type:'v6',cyl:6,red:6800},           maxima:{type:'v6',cyl:6,red:6500},           spyder:{type:'v6',cyl:6,red:6500},
   rx7:{type:'rotary',cyl:4,red:8500,turbo:1}, charger:{type:'v8',cyl:8,red:6000,blower:1}, camaro:{type:'v8',cyl:8,red:6500},
@@ -1491,7 +1493,7 @@ function realCarMesh(key,color){
 }
 
 // ---- car models: side profile extruded with rounded edges, glass cabin, real wheels, lights, vinyls ----
-const CAR_SHAPE={evo9:'sedan',civic:'sport',maxima:'sedan',s2000tran:'roadster',r33:'sport',supra:'sport',eclipse:'sport',s2000:'roadster',skyline:'sport',evo:'sedan',charger:'muscle',jetta:'sedan',s240:'sport',rx7:'sport',spyder:'roadster',camaro:'muscle',challenger:'muscle',robot:'wedge',taxi:'sedan'};
+const CAR_SHAPE={ae86:'sport',evo9:'sedan',civic:'sport',maxima:'sedan',s2000tran:'roadster',r33:'sport',supra:'sport',eclipse:'sport',s2000:'roadster',skyline:'sport',evo:'sedan',charger:'muscle',jetta:'sedan',s240:'sport',rx7:'sport',spyder:'roadster',camaro:'muscle',challenger:'muscle',robot:'wedge',taxi:'sedan'};
 const SHAPES={
   sport:   {clear:2.8,nose:5.6,hood:7.8,belt:8.6,roof:13.4,deck:8.9,tail:8.4,ws:[0.64,0.47],rw:[0.29,0.13]},
   sedan:   {clear:3.0,nose:6.4,hood:8.6,belt:9.4,roof:15.0,deck:9.6,tail:9.0,ws:[0.68,0.52],rw:[0.27,0.14]},
@@ -1519,6 +1521,7 @@ const MODEL={
   s2000tran:{tailL:'bar',wing:'gt'},
   r33:    {nose:6.0,hood:8.1,roof:13.8,tailL:'round4',wing:'gt'},
   evo9:   {nose:6.6,hood:8.8,tailL:'bar',wing:'gt',scoop:true},
+  ae86:   {headL:'hidden',tailL:'bar'},
 };
 const carMats={};
 function carShared(){
