@@ -1766,8 +1766,8 @@ function peerRoomApi(){
     let done=false,myId=null,myPres=Object.freeze({}),hubConn=null,errFn=null;
     const others=new Map(),conns=new Map(),listeners=new Set();
     const peer=isHost?new Peer(HUB,{debug:0}):new Peer({debug:0});
-    const fail=code=>{if(done)return;done=true;clearTimeout(timer);try{peer.destroy();}catch(e){}reject({code});};
-    const timer=setTimeout(()=>fail('timeout'),15000);
+    const fail=(code,why)=>{if(done)return;done=true;clearTimeout(timer);try{peer.destroy();}catch(e){}reject({code,why:why||code});};
+    const timer=setTimeout(()=>fail('timeout'),20000);
     const snapshot=()=>[{peer:myId,sameTab:true,isMe:true,presence:myPres},...[...others].map(([id,p])=>({peer:id,sameTab:false,isMe:false,presence:p}))];
     const notify=(left=[])=>{const peers=snapshot();for(const h of listeners){try{h({peers,joined:[],left,updated:[]});}catch(e){console.error(e);}}};
     const setOther=(id,p)=>others.set(id,Object.freeze(Object.assign({},p)));
@@ -1783,7 +1783,7 @@ function peerRoomApi(){
       onPeers:(h,onErr)=>{listeners.add(h);if(onErr)errFn=onErr;setTimeout(()=>{if(listeners.has(h))h({peers:snapshot(),joined:snapshot(),left:[],updated:[]});},0);return()=>listeners.delete(h);},
       leave:async()=>{done=true;listeners.clear();errFn=null;try{peer.destroy();}catch(e){}},
     };
-    peer.on('error',e=>{if(!done)fail(e.type==='unavailable-id'?'code_taken':e.type==='peer-unavailable'?'no_room':'upstream_error');});
+    peer.on('error',e=>{if(!done)fail(e.type==='unavailable-id'?'code_taken':e.type==='peer-unavailable'?'no_room':'upstream_error',e.type);});
     peer.on('open',id=>{
       myId=id;
       if(isHost){done=true;clearTimeout(timer);resolve(room);return;}
@@ -1828,7 +1828,7 @@ function netLobby(){myPresence({st:'lobby',r:null,cd:0,rt:999});}
 
 const newCode=()=>{const ch='abcdefghjkmnpqrstuvwxyz23456789';let c='';for(let i=0;i<4;i++)c+=ch[Math.floor(Math.random()*ch.length)];return c;};
 async function joinRoom(code,isHost,tries=0){
-  onlineMsg='Connecting…';renderOnline();
+  onlineMsg=tries?'Connecting… (try '+(tries+1)+')':'Connecting…';renderOnline();
   try{
     const room=await roomApi.join('race-'+code,isHost);
     net={room,code,isHost,track:0,lastRid:null,peers:room.peers(),lastSend:0};
@@ -1840,9 +1840,11 @@ async function joinRoom(code,isHost,tries=0){
   }catch(e){
     const c=e&&e.code;
     if(isHost&&c==='code_taken'&&tries<3)return joinRoom(newCode(),true,tries+1);
+    // the free connection server sometimes hiccups: try again by itself
+    if((c==='timeout'||c==='upstream_error')&&tries<2){await new Promise(r=>setTimeout(r,1500));return joinRoom(code,isHost,tries+1);}
     onlineMsg=c==='no_room'?'No race found with code '+code.toUpperCase()+'. Check the code with your friend.'
       :c==='not_permitted'?'This account is not allowed into online races here. Ask the game owner to share the link with you.'
-      :'Could not connect. Check the internet and try again.';
+      :'Could not connect ('+((e&&e.why)||'unknown')+'). Check the internet, turn off VPN or ad blocker for this site, and try again.';
     net=null;renderOnline();
   }
 }
